@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zanos City — Διαχείριση Ενοικίασης</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">🏠 Zanos City — Διαχείριση</span>
+    <div id="userBox" class="user-box" hidden>
+      <span id="userEmail"></span>
+      <button id="signOutBtn" class="btn-link">Αποσύνδεση</button>
+    </div>
+  </div>
+</header>
+
+<main id="app" class="wrap">
+
+  <!-- LOGIN VIEW -->
+  <section id="view-login" class="view">
+    <div class="card center-card">
+      <h1>Σύνδεση</h1>
+      <p class="muted">Θα σου στείλουμε ένα link σύνδεσης στο email σου — χωρίς κωδικό.</p>
+      <form id="loginForm">
+        <input type="email" id="loginEmail" placeholder="you@email.com" required autocomplete="email">
+        <button type="submit" class="btn-primary">Στείλε μου link σύνδεσης</button>
+      </form>
+      <p id="loginMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
+  <!-- LOADING VIEW -->
+  <section id="view-loading" class="view" hidden>
+    <p class="muted center-text">Φόρτωση…</p>
+  </section>
+
+  <!-- ONBOARDING VIEW (no membership yet) -->
+  <section id="view-onboarding" class="view" hidden>
+    <div class="onboarding-grid">
+      <div class="card">
+        <h2>Είμαι ο ιδιοκτήτης</h2>
+        <p class="muted">Φτιάξε το ακίνητο και πάρε έναν κωδικό πρόσκλησης για τον ενοικιαστή.</p>
+        <form id="createPropertyForm">
+          <label>Όνομα ακινήτου</label>
+          <input type="text" id="propName" value="Zanos City Studio" required>
+          <label>Διεύθυνση (προαιρετικό)</label>
+          <input type="text" id="propAddress" placeholder="Αγλαντζιά, Λευκωσία">
+          <button type="submit" class="btn-primary">Δημιουργία ακινήτου</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Είμαι ο ενοικιαστής</h2>
+        <p class="muted">Έχεις κωδικό πρόσκλησης από τον ιδιοκτήτη; Βάλ' τον εδώ.</p>
+        <form id="joinPropertyForm">
+          <label>Κωδικός πρόσκλησης</label>
+          <input type="text" id="inviteCodeInput" placeholder="π.χ. A1B2C3D4E5" required style="text-transform:uppercase;">
+          <button type="submit" class="btn-primary">Σύνδεση με το ακίνητο</button>
+        </form>
+      </div>
+    </div>
+    <p id="onboardingMsg" class="msg" hidden></p>
+  </section>
+
+  <!-- OWNER DASHBOARD -->
+  <section id="view-owner" class="view" hidden>
+    <div class="dash-header">
+      <div>
+        <h1 id="ownerPropName">—</h1>
+        <p class="muted" id="ownerPropAddress"></p>
+      </div>
+      <div class="invite-box">
+        <span class="label">Κωδικός πρόσκλησης ενοικιαστή</span>
+        <code id="inviteCodeDisplay">—</code>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="tenancy">Μίσθωση</button>
+      <button class="tab-btn" data-tab="payments">Πληρωμές</button>
+      <button class="tab-btn" data-tab="maintenance">Βλάβες</button>
+      <button class="tab-btn" data-tab="messages">Μηνύματα</button>
+    </nav>
+
+    <div class="tab-panel" data-panel="tenancy">
+      <div class="card" id="currentTenancyCard">
+        <h2>Τρέχουσα μίσθωση</h2>
+        <div id="currentTenancyInfo" class="muted">Δεν υπάρχει ενεργή μίσθωση.</div>
+      </div>
+      <div class="card">
+        <h2>Νέα / Επεξεργασία μίσθωσης</h2>
+        <form id="tenancyForm">
+          <label>Όνομα ενοικιαστή</label>
+          <input type="text" id="tenantName" placeholder="π.χ. Γιάννης Παπαδόπουλος">
+          <label>Email ενοικιαστή (προαιρετικό, για αναφορά)</label>
+          <input type="email" id="tenantEmail" placeholder="tenant@email.com">
+          <div class="form-row">
+            <div>
+              <label>Έναρξη μίσθωσης</label>
+              <input type="date" id="leaseStart" required>
+            </div>
+            <div>
+              <label>Λήξη μίσθωσης</label>
+              <input type="date" id="leaseEnd">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Ενοίκιο (€/μήνα)</label>
+              <input type="number" id="rentAmount" min="0" step="0.01" required>
+            </div>
+            <div>
+              <label>Κοινόχρηστα (€/έτος)</label>
+              <input type="number" id="commonYearly" min="0" step="0.01">
+            </div>
+            <div>
+              <label>Internet (€/μήνα)</label>
+              <input type="number" id="internetMonthly" min="0" step="0.01">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary">Αποθήκευση μίσθωσης</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Ιστορικό μισθώσεων</h2>
+        <div id="tenancyHistory" class="list"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="payments" hidden>
+      <div class="card">
+        <h2>Νέα καταχώρηση πληρωμής</h2>
+        <form id="paymentForm">
+          <div class="form-row">
+            <div>
+              <label>Κατηγορία</label>
+              <select id="paymentCategory">
+                <option value="rent">Ενοίκιο</option>
+                <option value="common_expenses">Κοινόχρηστα</option>
+                <option value="internet">Internet</option>
+                <option value="deposit">Εγγύηση</option>
+                <option value="other">Άλλο</option>
+              </select>
+            </div>
+            <div>
+              <label>Ποσό (€)</label>
+              <input type="number" id="paymentAmount" min="0" step="0.01" required>
+            </div>
+            <div>
+              <label>Προθεσμία</label>
+              <input type="date" id="paymentDue">
+            </div>
+          </div>
+          <label>Σημειώσεις</label>
+          <input type="text" id="paymentNotes" placeholder="π.χ. Ενοίκιο Νοεμβρίου">
+          <button type="submit" class="btn-primary">Καταχώρηση</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Πληρωμές</h2>
+        <div id="ownerPaymentsList" class="list"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="maintenance" hidden>
+      <div class="card">
+        <h2>Αναφορές βλαβών</h2>
+        <div id="ownerMaintenanceList" class="list"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="messages" hidden>
+      <div class="card">
+        <h2>Μηνύματα με τον ενοικιαστή</h2>
+        <div id="ownerMessagesList" class="messages-list"></div>
+        <form id="ownerMessageForm" class="message-form">
+          <input type="text" id="ownerMessageInput" placeholder="Γράψε μήνυμα…" required>
+          <button type="submit" class="btn-primary">Αποστολή</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- TENANT DASHBOARD -->
+  <section id="view-tenant" class="view" hidden>
+    <div class="dash-header">
+      <div>
+        <h1>Το μίσθιό μου</h1>
+        <p class="muted" id="tenantLeaseInfo"></p>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="t-payments">Πληρωμές</button>
+      <button class="tab-btn" data-tab="t-maintenance">Βλάβες</button>
+      <button class="tab-btn" data-tab="t-messages">Μηνύματα</button>
+    </nav>
+
+    <div class="tab-panel" data-panel="t-payments">
+      <div class="card">
+        <h2>Πληρωμές μου</h2>
+        <div id="tenantPaymentsList" class="list"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="t-maintenance" hidden>
+      <div class="card">
+        <h2>Αναφορά νέας βλάβης</h2>
+        <form id="maintenanceForm">
+          <label>Τίτλος</label>
+          <input type="text" id="maintTitle" placeholder="π.χ. Βλάβη στο boiler" required>
+          <label>Περιγραφή</label>
+          <textarea id="maintDescription" rows="3" placeholder="Περιέγραψε το πρόβλημα…"></textarea>
+          <label>Προτεραιότητα</label>
+          <select id="maintPriority">
+            <option value="low">Χαμηλή</option>
+            <option value="medium" selected>Μεσαία</option>
+            <option value="high">Υψηλή</option>
+            <option value="urgent">Επείγον</option>
+          </select>
+          <button type="submit" class="btn-primary">Αποστολή αναφοράς</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Οι αναφορές μου</h2>
+        <div id="tenantMaintenanceList" class="list"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="t-messages" hidden>
+      <div class="card">
+        <h2>Μηνύματα με τον ιδιοκτήτη</h2>
+        <div id="tenantMessagesList" class="messages-list"></div>
+        <form id="tenantMessageForm" class="message-form">
+          <input type="text" id="tenantMessageInput" placeholder="Γράψε μήνυμα…" required>
+          <button type="submit" class="btn-primary">Αποστολή</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
