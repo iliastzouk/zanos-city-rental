@@ -38,6 +38,7 @@ const TRANSLATIONS = {
     'onb.creating': 'Δημιουργία...',
     'onb.joining': 'Σύνδεση...',
     'onb.invalidCode': 'Μη έγκυρος κωδικός.',
+    'onb.notAllowed': 'Ο λογαριασμός σου δεν έχει δικαίωμα δημιουργίας ακινήτου. Αν είσαι ενοικιαστής, ζήτα κωδικό πρόσκλησης από τον ιδιοκτήτη.',
 
     'owner.inviteLabel': 'Κωδικός πρόσκλησης ενοικιαστή',
 
@@ -163,6 +164,7 @@ const TRANSLATIONS = {
     'onb.creating': 'Creating...',
     'onb.joining': 'Joining...',
     'onb.invalidCode': 'Invalid code.',
+    'onb.notAllowed': 'Your account is not allowed to create a property. If you are a tenant, ask the owner for an invite code.',
 
     'owner.inviteLabel': 'Tenant invite code',
 

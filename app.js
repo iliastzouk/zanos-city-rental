@@ -91,7 +91,11 @@ document.getElementById('createPropertyForm').addEventListener('submit', async (
   const { data: prop, error } = await sb.from('rental_properties')
     .insert({ name, address, created_by: currentUser.id })
     .select().single();
-  if (error) { setMsg(msg, t('error', { msg: error.message }), 'error'); return; }
+  if (error) {
+    // 42501 = blocked by the allowlist policy, not a real failure to report raw.
+    setMsg(msg, error.code === '42501' ? t('onb.notAllowed') : t('error', { msg: error.message }), 'error');
+    return;
+  }
   const { error: memErr } = await sb.from('rental_property_members')
     .insert({ property_id: prop.id, user_id: currentUser.id, role: 'owner', display_name: currentUser.email });
   if (memErr) { setMsg(msg, t('error', { msg: memErr.message }), 'error'); return; }
@@ -466,6 +470,8 @@ async function boot() {
     .select('*').eq('user_id', currentUser.id).limit(1).maybeSingle();
 
   if (!membership) {
+    const { data: canCreate } = await sb.rpc('rental_can_create_property');
+    document.getElementById('ownerOnboardCard').hidden = !canCreate;
     showView('view-onboarding');
     return;
   }
