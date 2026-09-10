@@ -387,11 +387,8 @@ document.getElementById('guestInviteForm').addEventListener('submit', async (e) 
 // GUEST DASHBOARD
 // ============================================================
 
-async function loadGuestDashboard() {
-  document.getElementById('guestPropName').textContent = currentProperty.name;
-  document.getElementById('guestPropAddress').textContent = currentProperty.address || '';
-
-  const el = document.getElementById('guestInfoList');
+async function renderInfoList(containerId) {
+  const el = document.getElementById(containerId);
   const { data: entries } = await sb.from('rental_property_info')
     .select('*').eq('property_id', currentProperty.id)
     .order('sort_order', { ascending: true });
@@ -407,6 +404,12 @@ async function loadGuestDashboard() {
         ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
       </div>
     </div>`).join('');
+}
+
+async function loadGuestDashboard() {
+  document.getElementById('guestPropName').textContent = currentProperty.name;
+  document.getElementById('guestPropAddress').textContent = currentProperty.address || '';
+  await renderInfoList('guestInfoList');
 }
 
 // ============================================================
@@ -433,6 +436,7 @@ async function loadTenantDashboard() {
   await refreshTenantPayments();
   await refreshTenantMaintenance();
   await refreshTenantMessages();
+  await renderInfoList('tenantInfoList');
 }
 
 async function refreshTenantPayments() {

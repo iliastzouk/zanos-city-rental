@@ -248,6 +248,7 @@
       <button class="tab-btn active" data-tab="t-payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="t-maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="t-messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="t-info" data-i18n="tab.info">Πληροφορίες</button>
     </nav>
 
     <div class="tab-panel" data-panel="t-payments">
@@ -289,6 +290,13 @@
           <input type="text" id="tenantMessageInput" data-i18n-placeholder="msg.placeholder" placeholder="Γράψε μήνυμα…" required>
           <button type="submit" class="btn-primary" data-i18n="msg.send">Αποστολή</button>
         </form>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="t-info" hidden>
+      <div class="card">
+        <h2 data-i18n="info.listTitle">Πληροφορίες χώρου</h2>
+        <div id="tenantInfoList" class="list"></div>
       </div>
     </div>
   </section>
