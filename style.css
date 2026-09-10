@@ -32,11 +32,21 @@ h2{font-size:1.1rem;}
 }
 .topbar-inner{
   max-width:900px; margin:0 auto; padding:14px 20px;
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
 }
-.brand{font-weight:700;}
-.topbar-actions{display:flex; align-items:center; gap:14px;}
-.user-box{display:flex; align-items:center; gap:12px; font-size:.85rem; color:var(--text-soft);}
+.brand{font-weight:700; white-space:nowrap;}
+.topbar-actions{display:flex; align-items:center; gap:14px; min-width:0;}
+.user-box{display:flex; align-items:center; gap:12px; font-size:.85rem; color:var(--text-soft); min-width:0;}
+/* Never let a long address push the buttons off the edge. */
+#userEmail{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px;}
+
+/* On a phone the brand and the account controls each get their own line. */
+@media (max-width:640px){
+  .topbar-inner{flex-direction:column; align-items:stretch; padding:10px 16px; gap:8px;}
+  .topbar-actions{justify-content:space-between; gap:10px;}
+  .brand{font-size:.95rem;}
+  #userEmail{max-width:none; flex:1 1 auto;}
+}
 .btn-lang{
   background:var(--bg-alt); border:1px solid var(--line); color:var(--text);
   padding:5px 10px; border-radius:8px; font-size:.78rem; font-weight:700;
