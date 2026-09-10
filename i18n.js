@@ -29,7 +29,7 @@ const TRANSLATIONS = {
     'login.badCredentials': 'Λάθος email ή κωδικός.',
     'login.rateLimited': 'Στάλθηκαν πολλά link σύνδεσης. Δοκίμασε ξανά σε λίγο ή μπες με κωδικό.',
     'login.guestTitle': 'Είσοδος επισκέπτη',
-    'login.guestHint': 'Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ\' τον εδώ.',
+    'login.guestHint': 'Βάλε τον κωδικό που σου έδωσε ο ιδιοκτήτης. Δεν χρειάζεται λογαριασμός.',
 
     'login.magicTitle': 'Σύνδεση χωρίς κωδικό',
     'login.magicHint': 'Θα σου στείλουμε ένα link στο email σου και μπαίνεις με ένα πάτημα. Είναι κανονικός τρόπος σύνδεσης — δεν χρειάζεται ποτέ να ορίσεις κωδικό.',
@@ -61,9 +61,6 @@ const TRANSLATIONS = {
     'account.save': 'Αποθήκευση κωδικού',
     'account.saving': 'Αποθήκευση...',
     'account.saved': 'Ο κωδικός αποθηκεύτηκε. Από εδώ και πέρα μπορείς να μπαίνεις με αυτόν.',
-
-    'guest.exit': 'Έξοδος',
-    'guest.badge': 'Προβολή επισκέπτη',
 
     'loading': 'Φόρτωση…',
 
@@ -146,8 +143,6 @@ const TRANSLATIONS = {
     'act.UPDATE': 'Αλλαγή',
     'act.DELETE': 'Διαγραφή',
     'act.ERROR': 'Σφάλμα',
-
-    'login.haveAccount': 'Έχω λογαριασμό',
     'login.imGuest': 'Είμαι επισκέπτης',
 
     'tab.info': 'Πληροφορίες',
@@ -171,6 +166,8 @@ const TRANSLATIONS = {
     'gcode.validDays': 'Ισχύς (ημέρες, κενό = χωρίς λήξη)',
     'gcode.create': 'Δημιουργία κωδικού',
     'gcode.empty': 'Κανένας κωδικός ακόμα.',
+    'gcode.copyLink': 'Αντιγραφή συνδέσμου',
+    'gcode.copied': 'Αντιγράφηκε ✓',
     'gcode.revoke': 'Ακύρωση',
     'gcode.revokeConfirm': 'Να ακυρωθεί αυτός ο κωδικός;',
     'gcode.expiresOn': 'Λήγει {date}',
@@ -295,7 +292,7 @@ const TRANSLATIONS = {
     'login.badCredentials': 'Wrong email or password.',
     'login.rateLimited': 'Too many sign-in links sent. Try again shortly, or sign in with a password.',
     'login.guestTitle': 'Guest access',
-    'login.guestHint': 'Got a guest code? No account needed — enter it here.',
+    'login.guestHint': 'Enter the code the owner gave you. No account needed.',
 
     'login.magicTitle': 'Sign in without a password',
     'login.magicHint': 'We email you a link and you are in with one tap. This is a full sign-in method on its own — you never have to set a password.',
@@ -327,9 +324,6 @@ const TRANSLATIONS = {
     'account.save': 'Save password',
     'account.saving': 'Saving...',
     'account.saved': 'Password saved. You can sign in with it from now on.',
-
-    'guest.exit': 'Exit',
-    'guest.badge': 'Guest view',
 
     'loading': 'Loading…',
 
@@ -412,8 +406,6 @@ const TRANSLATIONS = {
     'act.UPDATE': 'Changed',
     'act.DELETE': 'Deleted',
     'act.ERROR': 'Error',
-
-    'login.haveAccount': 'I have an account',
     'login.imGuest': 'I am a guest',
 
     'tab.info': 'Information',
@@ -437,6 +429,8 @@ const TRANSLATIONS = {
     'gcode.validDays': 'Valid for (days, blank = no expiry)',
     'gcode.create': 'Create code',
     'gcode.empty': 'No codes yet.',
+    'gcode.copyLink': 'Copy link',
+    'gcode.copied': 'Copied ✓',
     'gcode.revoke': 'Revoke',
     'gcode.revokeConfirm': 'Revoke this code?',
     'gcode.expiresOn': 'Expires {date}',

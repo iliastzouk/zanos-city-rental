@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- The code travels in the fragment, which browsers never send anywhere; this
+     keeps it out of referrers for the few external requests this page makes. -->
+<meta name="referrer" content="no-referrer">
+<title>Zanos City — Πληροφορίες χώρου</title>
+<link rel="stylesheet" href="../style.css?v=20260911b">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand" data-i18n="brand">🏠 Zanos City</span>
+    <div class="topbar-actions">
+      <button id="langToggle" class="btn-lang" type="button" data-i18n="lang.other">EN</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="guest-loading" class="view">
+    <p class="muted center-text" data-i18n="loading">Φόρτωση…</p>
+  </section>
+
+  <!-- Shown when the link carried no code, or the code was refused. -->
+  <section id="guest-code" class="view" hidden>
+    <div class="card center-card">
+      <h1 data-i18n="login.guestTitle">Είσοδος επισκέπτη</h1>
+      <p class="muted" data-i18n="login.guestHint">Έχεις κωδικό επισκέπτη; Βάλ' τον εδώ.</p>
+      <form id="guestCodeForm">
+        <input type="text" id="guestCodeInput" data-i18n-placeholder="onb.guest.codePlaceholder" placeholder="π.χ. G1H2J3K4L5" required>
+        <button type="submit" class="btn-primary" data-i18n="onb.guest.submit">Είσοδος ως επισκέπτης</button>
+      </form>
+      <p id="guestMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
+  <section id="guest-info" class="view" hidden>
+    <div class="dash-header">
+      <div>
+        <h1 id="guestPropName">—</h1>
+        <p class="muted" id="guestPropAddress"></p>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="guest.title">Πληροφορίες χώρου</h2>
+      <div id="guestInfoList" class="list"></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="../i18n.js?v=20260911b"></script>
+<script src="guest.js?v=20260911b"></script>
+</body>
+</html>

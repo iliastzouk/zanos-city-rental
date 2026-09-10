@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911a">
+<link rel="stylesheet" href="style.css?v=20260911b">
 </head>
 <body>
 
@@ -19,10 +19,6 @@
         <span id="userEmail"></span>
         <button id="passwordToggle" class="btn-link" data-i18n="account.button">Κωδικός</button>
         <button id="signOutBtn" class="btn-link" data-i18n="signOut">Αποσύνδεση</button>
-      </div>
-      <div id="guestBox" class="user-box" hidden>
-        <span class="pill paid" data-i18n="guest.badge">Προβολή επισκέπτη</span>
-        <button id="guestExitBtn" class="btn-link" data-i18n="guest.exit">Έξοδος</button>
       </div>
     </div>
   </div>
@@ -60,6 +56,7 @@
       <button id="magicLinkBtn" class="btn-small" type="button" data-i18n="login.magicLink">Στείλε μου link σύνδεσης</button>
       <p id="loginMsg" class="msg" hidden></p>
     </div>
+    <a class="btn-link center-link" href="guest/" data-i18n="login.imGuest">Είμαι επισκέπτης</a>
 
     <div class="card center-card" id="signupCard" hidden>
       <h1 data-i18n="signup.title">Δημιουργία λογαριασμού</h1>
@@ -77,17 +74,6 @@
       <button id="backToSignIn" class="btn-link" type="button" data-i18n="signup.back">← Πίσω στη σύνδεση</button>
     </div>
 
-    <div class="card center-card" id="guestCard">
-      <h2 data-i18n="login.guestTitle">Είσοδος επισκέπτη</h2>
-      <p class="muted" data-i18n="login.guestHint">Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ' τον εδώ.</p>
-      <form id="guestCodeForm">
-        <input type="text" id="guestCodeInput" data-i18n-placeholder="onb.guest.codePlaceholder" placeholder="π.χ. G1H2J3K4L5" required>
-        <button type="submit" class="btn-primary" data-i18n="onb.guest.submit">Είσοδος ως επισκέπτης</button>
-      </form>
-      <p id="guestMsg" class="msg" hidden></p>
-    </div>
-    <button id="revealGuest" class="btn-link center-link" type="button" hidden data-i18n="login.imGuest">Είμαι επισκέπτης</button>
-    <button id="revealAccount" class="btn-link center-link" type="button" hidden data-i18n="login.haveAccount">Έχω λογαριασμό</button>
   </section>
 
   <!-- LOADING VIEW -->
@@ -456,24 +442,10 @@
     </div>
   </section>
 
-  <!-- GUEST DASHBOARD -->
-  <section id="view-guest" class="view" hidden>
-    <div class="dash-header">
-      <div>
-        <h1 id="guestPropName">—</h1>
-        <p class="muted" id="guestPropAddress"></p>
-      </div>
-    </div>
-    <div class="card">
-      <h2 data-i18n="guest.title">Πληροφορίες χώρου</h2>
-      <div id="guestInfoList" class="list"></div>
-    </div>
-  </section>
-
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911a"></script>
-<script src="app.js?v=20260911a"></script>
+<script src="i18n.js?v=20260911b"></script>
+<script src="app.js?v=20260911b"></script>
 </body>
 </html>

@@ -68,8 +68,7 @@ function initTabs(scopeSelector) {
 }
 
 // ---------- Auth ----------
-const GUEST_CODE_KEY = 'zanos_guest_code';
-const DEVICE_ROLE_KEY = 'zanos_device_role';
+const GUEST_PAGE = 'guest/';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 let loggingError = false;
@@ -137,36 +136,6 @@ document.getElementById('magicLinkBtn').addEventListener('click', async () => {
   const { error } = await sendMagicLink(email);
   if (error) setMsg(msg, authErrorText(error), 'error');
   else setMsg(msg, t('login.sent'), 'ok');
-});
-
-function rememberDeviceRole(role) {
-  try { localStorage.setItem(DEVICE_ROLE_KEY, role); } catch (e) { /* private mode */ }
-}
-
-// A phone that has signed in as owner or tenant should not be offered the guest
-// entry, and vice versa. Both stay reachable behind a link, since a device can
-// legitimately change hands.
-function applyDeviceRoleToLogin() {
-  let role = null;
-  try { role = localStorage.getItem(DEVICE_ROLE_KEY); } catch (e) { /* private mode */ }
-
-  const guestHidden = role === 'account';
-  const accountHidden = role === 'guest';
-
-  document.getElementById('guestCard').hidden = guestHidden;
-  document.getElementById('revealGuest').hidden = !guestHidden;
-  document.getElementById('signinCard').hidden = accountHidden;
-  document.getElementById('signupCard').hidden = true;
-  document.getElementById('revealAccount').hidden = !accountHidden;
-}
-
-document.getElementById('revealGuest').addEventListener('click', () => {
-  document.getElementById('guestCard').hidden = false;
-  document.getElementById('revealGuest').hidden = true;
-});
-document.getElementById('revealAccount').addEventListener('click', () => {
-  document.getElementById('signinCard').hidden = false;
-  document.getElementById('revealAccount').hidden = true;
 });
 
 function showSignupCard(show) {
@@ -262,26 +231,6 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
   const { error } = await sb.rpc('rental_join_property', { p_invite_code: code });
   if (error) { setMsg(msg, t('onb.invalidCode'), 'error'); return; }
   await boot();
-});
-
-document.getElementById('guestCodeForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const code = document.getElementById('guestCodeInput').value.trim();
-  const msg = document.getElementById('guestMsg');
-  setMsg(msg, t('onb.guest.redeeming'), '');
-  if (await showGuestView(code)) {
-    try { localStorage.setItem(GUEST_CODE_KEY, code); } catch (e) { /* private mode */ }
-    rememberDeviceRole('guest');
-    setMsg(msg, '', '');
-  } else {
-    setMsg(msg, t('onb.guest.invalid'), 'error');
-  }
-});
-
-document.getElementById('guestExitBtn').addEventListener('click', () => {
-  localStorage.removeItem(GUEST_CODE_KEY);
-  document.getElementById('guestCodeInput').value = '';
-  boot();
 });
 
 // ============================================================
@@ -608,6 +557,13 @@ document.getElementById('infoForm').addEventListener('submit', async (e) => {
   await refreshPropertyInfo();
 });
 
+// The guest page sits next to this one, with the code in the fragment so it is
+// never sent to a server or leaked through a referrer.
+function guestLinkFor(code) {
+  const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+  return base + GUEST_PAGE + '#' + encodeURIComponent(code);
+}
+
 function guestInviteStatus(invite) {
   if (invite.revoked_at) return { key: 'gcode.statusRevoked', pill: 'low' };
   if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
@@ -637,9 +593,24 @@ async function refreshGuestInvites() {
         }</div>
       </div>
       <span class="pill ${status.pill}">${t(status.key)}</span>
+      ${invite.revoked_at ? '' : `<button class="btn-small" data-copy-link="${escapeHtml(invite.code)}">${t('gcode.copyLink')}</button>`}
       ${invite.revoked_at ? '' : `<button class="btn-small danger" data-revoke="${invite.id}">${t('gcode.revoke')}</button>`}
     </div>`;
   }).join('');
+
+  el.querySelectorAll('[data-copy-link]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const link = guestLinkFor(btn.getAttribute('data-copy-link'));
+      try {
+        await navigator.clipboard.writeText(link);
+        btn.textContent = t('gcode.copied');
+        setTimeout(() => { btn.textContent = t('gcode.copyLink'); }, 2000);
+      } catch (e) {
+        // Clipboard access can be refused; show the link so it can be copied by hand.
+        prompt(t('gcode.copyLink'), link);
+      }
+    });
+  });
 
   el.querySelectorAll('[data-revoke]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -798,57 +769,6 @@ async function refreshAudit() {
 
 document.getElementById('auditRefresh').addEventListener('click', refreshAudit);
 document.getElementById('auditFilter').addEventListener('change', refreshAudit);
-
-// ============================================================
-// GUEST DASHBOARD
-// ============================================================
-
-async function renderInfoList(containerId) {
-  const el = document.getElementById(containerId);
-  const { data: entries } = await sb.from('rental_property_info')
-    .select('*').eq('property_id', currentProperty.id)
-    .order('sort_order', { ascending: true });
-
-  if (!entries || entries.length === 0) {
-    el.innerHTML = `<span class="muted">${t('guest.empty')}</span>`;
-    return;
-  }
-  el.innerHTML = entries.map(entry => `
-    <div class="list-item">
-      <div class="main">
-        <div class="title">${escapeHtml(entry.title)}</div>
-        ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
-      </div>
-    </div>`).join('');
-}
-
-// Returns false for an unknown, revoked or expired code so the caller can
-// tell the visitor, rather than dropping them on an empty page.
-async function showGuestView(code) {
-  const { data: rows, error } = await sb.rpc('rental_guest_view', { p_code: code });
-  if (error || !rows || rows.length === 0) return false;
-
-  document.getElementById('guestPropName').textContent = rows[0].property_name;
-  document.getElementById('guestPropAddress').textContent = rows[0].property_address || '';
-
-  const entries = rows.filter(r => r.entry_title);
-  const el = document.getElementById('guestInfoList');
-  el.innerHTML = entries.length === 0
-    ? `<span class="muted">${t('guest.empty')}</span>`
-    : entries.map(r => `
-      <div class="list-item">
-        <div class="main">
-          <div class="title">${escapeHtml(r.entry_title)}</div>
-          ${r.entry_body ? `<div class="sub">${escapeHtml(r.entry_body)}</div>` : ''}
-        </div>
-      </div>`).join('');
-
-  document.getElementById('userBox').hidden = true;
-  document.getElementById('guestBox').hidden = false;
-  document.getElementById('passwordPanel').hidden = true;
-  showView('view-guest');
-  return true;
-}
 
 // ============================================================
 // TENANT DASHBOARD
@@ -1052,25 +972,19 @@ async function renderMessages(containerId, tenancyId) {
 async function boot() {
   showView('view-loading');
 
-  document.getElementById('guestBox').hidden = true;
-
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
     currentUser = null;
     document.getElementById('userBox').hidden = true;
     document.getElementById('passwordPanel').hidden = true;
     // A guest is identified by their code alone, with no account at all.
-    let savedCode = null;
-    try { savedCode = localStorage.getItem(GUEST_CODE_KEY); } catch (e) { /* private mode */ }
-    if (savedCode && await showGuestView(savedCode)) return;
-    try { localStorage.removeItem(GUEST_CODE_KEY); } catch (e) { /* private mode */ }
-    applyDeviceRoleToLogin();
+    document.getElementById('signupCard').hidden = true;
+    document.getElementById('signinCard').hidden = false;
     showView('view-login');
     return;
   }
 
   currentUser = session.user;
-  rememberDeviceRole('account');
   document.getElementById('userBox').hidden = false;
   document.getElementById('userEmail').textContent = currentUser.email;
 
