@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911c">
+<link rel="stylesheet" href="style.css?v=20260911d">
 </head>
 <body>
 
@@ -127,6 +127,7 @@
       <button class="tab-btn" data-tab="messages" data-i18n="tab.messages">Μηνύματα</button>
       <button class="tab-btn" data-tab="documents" data-i18n="tab.documents">Έγγραφα</button>
       <button class="tab-btn" data-tab="info" data-i18n="tab.info">Πληροφορίες</button>
+      <button class="tab-btn" data-tab="guests" data-i18n="tab.guests">Επισκέπτες</button>
       <button class="tab-btn" data-tab="audit" data-i18n="tab.audit">Ιστορικό</button>
     </nav>
 
@@ -204,6 +205,10 @@
     <div class="tab-panel" data-panel="payments" hidden>
       <div class="card">
         <h2 data-i18n="pay.formTitle">Νέα καταχώρηση πληρωμής</h2>
+        <p id="paymentEditNote" class="muted" hidden>
+          <span data-i18n="pay.editing">Επεξεργασία χρέωσης</span> ·
+          <button type="button" id="cancelPaymentEdit" class="btn-link" data-i18n="pay.cancelEdit">Ακύρωση</button>
+        </p>
         <form id="paymentForm">
           <div class="form-row">
             <div>
@@ -227,11 +232,14 @@
           </div>
           <label data-i18n="pay.notes">Σημειώσεις</label>
           <input type="text" id="paymentNotes" data-i18n-placeholder="pay.notesPlaceholder" placeholder="π.χ. Ενοίκιο Νοεμβρίου">
+          <label id="paymentFileLabel" data-i18n="pay.attachment">Λογαριασμός / απόδειξη (προαιρετικό)</label>
+          <input type="file" id="paymentFile">
           <label class="check-row">
             <input type="checkbox" id="paymentRecurring">
             <span data-i18n="pay.recurring">Επαναλαμβανόμενο κάθε μήνα μέχρι τη λήξη της μίσθωσης</span>
           </label>
           <button type="submit" class="btn-primary" data-i18n="pay.submit">Καταχώρηση</button>
+          <p id="paymentMsg" class="msg" hidden></p>
         </form>
       </div>
       <div class="card">
@@ -306,7 +314,10 @@
         <div id="ownerInfoList" class="list"></div>
       </div>
 
-          <div class="card">
+        </div>
+
+    <div class="tab-panel" data-panel="guests" hidden>
+      <div class="card">
         <h2 data-i18n="gcode.title">Κωδικοί επισκεπτών</h2>
         <form id="guestInviteForm">
           <div class="form-row">
@@ -407,28 +418,8 @@
 
     <div class="tab-panel" data-panel="t-documents" hidden>
       <div class="card">
-        <h2 data-i18n="doc.formTitle">Ανέβασμα εγγράφου</h2>
-        <form id="tenantDocForm">
-          <label data-i18n="doc.title">Τίτλος</label>
-          <input type="text" id="tenantDocTitle" data-i18n-placeholder="doc.titlePlaceholder" placeholder="π.χ. Λογαριασμός ΑΗΚ" required>
-          <label data-i18n="doc.category">Κατηγορία</label>
-          <select id="tenantDocCategory">
-                <option value="electricity" data-i18n="doccat.electricity">Ρεύμα</option>
-                <option value="water" data-i18n="doccat.water">Νερό</option>
-                <option value="internet" data-i18n="doccat.internet">Internet</option>
-                <option value="common_expenses" data-i18n="doccat.common_expenses">Κοινόχρηστα</option>
-                <option value="contract" data-i18n="doccat.contract">Συμβόλαιο</option>
-                <option value="receipt" data-i18n="doccat.receipt">Απόδειξη</option>
-                <option value="other" selected data-i18n="doccat.other">Άλλο</option>
-          </select>
-          <label data-i18n="doc.file">Αρχείο</label>
-          <input type="file" id="tenantDocFile" required>
-          <button type="submit" class="btn-primary" data-i18n="doc.upload">Ανέβασμα</button>
-        </form>
-        <p id="tenantDocMsg" class="msg" hidden></p>
-      </div>
-      <div class="card">
         <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <p class="muted" data-i18n="doc.readOnlyHint">Τα έγγραφα τα ανεβάζει ο ιδιοκτήτης.</p>
         <div id="tenantDocList" class="list"></div>
       </div>
     </div>
@@ -444,7 +435,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911c"></script>
-<script src="app.js?v=20260911c"></script>
+<script src="i18n.js?v=20260911d"></script>
+<script src="app.js?v=20260911d"></script>
 </body>
 </html>

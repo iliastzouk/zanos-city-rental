@@ -84,6 +84,16 @@ const TRANSLATIONS = {
     'onb.guest.invalid': 'Μη έγκυρος ή ληγμένος κωδικός επισκέπτη.',
     'onb.guest.redeeming': 'Έλεγχος κωδικού...',
 
+    'tab.guests': 'Επισκέπτες',
+    'pay.attachment': 'Λογαριασμός / απόδειξη (προαιρετικό)',
+    'pay.attachmentNote': 'Δεν επισυνάπτεται αρχείο σε επαναλαμβανόμενη σειρά.',
+    'pay.openAttachment': 'Λογαριασμός',
+    'pay.edit': 'Επεξεργασία',
+    'pay.editing': 'Επεξεργασία χρέωσης',
+    'pay.update': 'Ενημέρωση',
+    'pay.cancelEdit': 'Ακύρωση',
+    'pay.replaceFile': 'Νέο αρχείο (αντικαθιστά το υπάρχον)',
+    'doc.readOnlyHint': 'Τα έγγραφα τα ανεβάζει ο ιδιοκτήτης.',
     'tab.documents': 'Έγγραφα',
     'tab.audit': 'Ιστορικό',
 
@@ -346,6 +356,16 @@ const TRANSLATIONS = {
     'onb.guest.invalid': 'Invalid or expired guest code.',
     'onb.guest.redeeming': 'Checking code...',
 
+    'tab.guests': 'Guests',
+    'pay.attachment': 'Bill or receipt (optional)',
+    'pay.attachmentNote': 'A recurring series takes no attachment.',
+    'pay.openAttachment': 'Bill',
+    'pay.edit': 'Edit',
+    'pay.editing': 'Editing a charge',
+    'pay.update': 'Update',
+    'pay.cancelEdit': 'Cancel',
+    'pay.replaceFile': 'New file (replaces the current one)',
+    'doc.readOnlyHint': 'Documents are uploaded by the owner.',
     'tab.documents': 'Documents',
     'tab.audit': 'History',
 

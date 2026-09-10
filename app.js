@@ -16,6 +16,7 @@ let currentMembership = null; // { property_id, role, ... }
 let currentProperty = null;
 let currentTenancy = null; // active tenancy (owner: latest active; tenant: their own)
 let editingTenancyId = null;
+let editingPaymentId = null;
 
 // ---------- View management ----------
 function showView(id) {
@@ -233,6 +234,22 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
   await boot();
 });
 
+// Files live under <tenancy_id>/..., which is what the storage policies read
+// to decide who may open them.
+async function uploadTenancyFile(file, folder) {
+  const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+  const path = `${currentTenancy.id}/${folder}/${crypto.randomUUID()}${ext}`;
+  const { error } = await sb.storage.from('rental-documents').upload(path, file);
+  return { path, error };
+}
+
+async function openStoredFile(path) {
+  // The bucket is private, so every view needs a short-lived signed URL.
+  const { data, error } = await sb.storage.from('rental-documents').createSignedUrl(path, 60);
+  if (error) { reportFailure('storage.sign', error); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
 // ============================================================
 // OWNER DASHBOARD
 // ============================================================
@@ -440,8 +457,20 @@ async function refreshOwnerPayments() {
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
       <span class="pill ${p.status}">${statusLabel(p.status)}</span>
+      ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
+      <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
     </div>`).join('');
+
+  listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
+    btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
+  });
+
+  listEl.querySelectorAll('[data-edit-payment]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      startPaymentEdit(payments.find(p => p.id === btn.getAttribute('data-edit-payment')));
+    });
+  });
 
   listEl.querySelectorAll('[data-mark-paid]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -452,19 +481,63 @@ async function refreshOwnerPayments() {
   });
 }
 
+function startPaymentEdit(payment) {
+  if (!payment) return;
+  editingPaymentId = payment.id;
+  const catSelect = document.getElementById('paymentCategory');
+  catSelect.value = payment.category;
+  if (!catSelect.value) catSelect.value = 'other';  // unknown category, do not blank it
+  document.getElementById('paymentAmount').value = payment.amount;
+  document.getElementById('paymentDue').value = payment.due_date || '';
+  document.getElementById('paymentNotes').value = payment.notes || '';
+  document.getElementById('paymentFile').value = '';
+  // Recurrence is decided once, when the series is created.
+  document.getElementById('paymentRecurring').checked = false;
+  document.getElementById('paymentRecurring').disabled = true;
+  document.getElementById('paymentFileLabel').textContent = t('pay.replaceFile');
+  document.getElementById('paymentEditNote').hidden = false;
+  document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.update');
+  document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelPaymentEdit() {
+  editingPaymentId = null;
+  document.getElementById('paymentForm').reset();
+  document.getElementById('paymentRecurring').disabled = false;
+  document.getElementById('paymentFileLabel').textContent = t('pay.attachment');
+  document.getElementById('paymentEditNote').hidden = true;
+  document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.submit');
+  setMsg(document.getElementById('paymentMsg'), '', '');
+}
+
+document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPaymentEdit);
+
+// An attachment makes no sense across a whole series, only on one charge.
+document.getElementById('paymentRecurring').addEventListener('change', (e) => {
+  const file = document.getElementById('paymentFile');
+  file.disabled = e.target.checked;
+  if (e.target.checked) file.value = '';
+  document.getElementById('paymentFileLabel').textContent =
+    e.target.checked ? t('pay.attachmentNote') : t('pay.attachment');
+});
+
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert(t('need.tenancyFirst')); return; }
+  const msg = document.getElementById('paymentMsg');
+  if (!currentTenancy) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
 
   const category = document.getElementById('paymentCategory').value;
   const amount = parseFloat(document.getElementById('paymentAmount').value);
   const due = document.getElementById('paymentDue').value || null;
   const notes = document.getElementById('paymentNotes').value.trim() || null;
   const recurring = document.getElementById('paymentRecurring').checked;
+  const file = document.getElementById('paymentFile').files[0] || null;
+
+  if (file && file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
   if (recurring) {
     // Without a first date there is nothing to step monthly from.
-    if (!due) { alert(t('pay.needDueDate')); return; }
+    if (!due) { setMsg(msg, t('pay.needDueDate'), 'error'); return; }
     const { data: created, error } = await sb.rpc('rental_create_recurring_payments', {
       p_tenancy_id: currentTenancy.id,
       p_category: category,
@@ -472,17 +545,35 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       p_first_due: due,
       p_notes: notes
     });
-    if (error) { reportFailure('payments.recurring', error); return; }
+    if (error) { reportFailure('payments.recurring', error, msg); return; }
     alert(t('pay.recurringDone', { count: created }));
   } else {
-    const { error } = await sb.from('rental_payments').insert({
-      tenancy_id: currentTenancy.id, category, amount, due_date: due, notes,
-      created_by: currentUser.id
-    });
-    if (error) { reportFailure('payments.add', error); return; }
+    let proofPath;
+    if (file) {
+      setMsg(msg, t('doc.uploading'), '');
+      const { path, error: upErr } = await uploadTenancyFile(file, 'payments');
+      if (upErr) { reportFailure('payments.upload', upErr, msg); return; }
+      proofPath = path;
+    }
+
+    const payload = { category, amount, due_date: due, notes };
+    if (proofPath) payload.proof_path = proofPath;
+
+    const { error } = editingPaymentId
+      ? await sb.from('rental_payments').update(payload).eq('id', editingPaymentId)
+      : await sb.from('rental_payments').insert({
+          ...payload, tenancy_id: currentTenancy.id, created_by: currentUser.id
+        });
+
+    if (error) {
+      // Do not leave the just-uploaded file behind if the row did not take it.
+      if (proofPath) await sb.storage.from('rental-documents').remove([proofPath]);
+      reportFailure(editingPaymentId ? 'payments.update' : 'payments.add', error, msg);
+      return;
+    }
   }
 
-  e.target.reset();
+  cancelPaymentEdit();
   await refreshOwnerPayments();
 });
 
@@ -647,6 +738,7 @@ document.getElementById('guestInviteForm').addEventListener('submit', async (e) 
 function docCategoryLabel(v) { return t('doccat.' + v); }
 
 async function refreshDocuments(prefix) {
+  const canManage = prefix === 'owner';
   const el = document.getElementById(prefix + 'DocList');
   if (!currentTenancy) {
     el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
@@ -666,17 +758,11 @@ async function refreshDocuments(prefix) {
           <div class="sub">${docCategoryLabel(d.category)} · ${fmtDate(d.created_at)}</div>
         </div>
         <button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>
-        <button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>
+        ${canManage ? `<button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>` : ''}
       </div>`).join('');
 
   el.querySelectorAll('[data-open-doc]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      // The bucket is private, so every view needs a short-lived signed URL.
-      const { data, error: urlErr } = await sb.storage.from('rental-documents')
-        .createSignedUrl(btn.getAttribute('data-path'), 60);
-      if (urlErr) { reportFailure('documents.sign', urlErr); return; }
-      window.open(data.signedUrl, '_blank');
-    });
+    btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-path')));
   });
 
   el.querySelectorAll('[data-del-doc]').forEach(btn => {
@@ -704,12 +790,7 @@ function wireDocumentUpload(prefix) {
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
     setMsg(msg, t('doc.uploading'), '');
-    // The first path segment is the tenancy: that is what the storage policies
-    // read to decide who may open the file.
-    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
-    const path = `${currentTenancy.id}/${crypto.randomUUID()}${ext}`;
-
-    const { error: upErr } = await sb.storage.from('rental-documents').upload(path, file);
+    const { path, error: upErr } = await uploadTenancyFile(file, 'documents');
     if (upErr) { reportFailure('documents.upload', upErr, msg); return; }
 
     const { error: rowErr } = await sb.from('rental_documents').insert({
@@ -733,8 +814,8 @@ function wireDocumentUpload(prefix) {
   });
 }
 
+// Only the owner uploads; the tenant's tab is a read-only list.
 wireDocumentUpload('owner');
-wireDocumentUpload('tenant');
 
 // ============================================================
 // Audit log (owner only)
@@ -773,6 +854,26 @@ document.getElementById('auditFilter').addEventListener('change', refreshAudit);
 // ============================================================
 // TENANT DASHBOARD
 // ============================================================
+
+// Read-only list of the property information. RLS decides which entries a
+// tenant gets back, so the query needs no role handling of its own.
+async function renderInfoList(containerId) {
+  const el = document.getElementById(containerId);
+  const { data: entries, error } = await sb.from('rental_property_info')
+    .select('*').eq('property_id', currentProperty.id)
+    .order('sort_order', { ascending: true });
+  if (error) { reportFailure('info.load', error); return; }
+
+  el.innerHTML = (!entries || entries.length === 0)
+    ? `<span class="muted">${t('guest.empty')}</span>`
+    : entries.map(entry => `
+      <div class="list-item">
+        <div class="main">
+          <div class="title">${escapeHtml(entry.title)}</div>
+          ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
+        </div>
+      </div>`).join('');
+}
 
 async function loadTenantDashboard() {
   const { data: tenancy } = await sb.from('rental_tenancies')
@@ -815,7 +916,12 @@ async function refreshTenantPayments() {
         <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
       </div>
       <span class="pill ${p.status}">${statusLabel(p.status)}</span>
+      ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
     </div>`).join('');
+
+  listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
+    btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
+  });
 }
 
 document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
