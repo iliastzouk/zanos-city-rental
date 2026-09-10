@@ -80,7 +80,7 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .msg.ok{background:#e6f4ea; color:var(--ok);}
 .msg.error{background:#fbe9e7; color:var(--danger);}
 
-.onboarding-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+.onboarding-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px;}
 @media (max-width:700px){ .onboarding-grid{grid-template-columns:1fr;} }
 
 .dash-header{
@@ -148,3 +148,8 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 /* Invite codes are typed in uppercase, but the placeholder hint is not. */
 #inviteCodeInput{text-transform:uppercase;}
 #inviteCodeInput::placeholder{text-transform:none;}
+
+/* Checkbox sits inline with its label, unlike the stacked form fields. */
+.check-row{display:flex; align-items:center; gap:8px; margin:14px 0 0; font-weight:500;}
+.check-row input[type=checkbox]{width:auto; margin:0;}
+.list-item code{background:var(--bg-alt); padding:2px 8px; border-radius:6px; letter-spacing:.08em;}

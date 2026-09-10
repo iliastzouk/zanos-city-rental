@@ -112,6 +112,16 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
   await boot();
 });
 
+document.getElementById('guestCodeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = document.getElementById('guestCodeInput').value.trim();
+  const msg = document.getElementById('onboardingMsg');
+  setMsg(msg, t('onb.guest.redeeming'), '');
+  const { error } = await sb.rpc('rental_redeem_guest_code', { p_code: code });
+  if (error) { setMsg(msg, t('onb.guest.invalid'), 'error'); return; }
+  await boot();
+});
+
 // ============================================================
 // OWNER DASHBOARD
 // ============================================================
@@ -125,6 +135,8 @@ async function loadOwnerDashboard() {
   await refreshOwnerPayments();
   await refreshOwnerMaintenance();
   await refreshOwnerMessages();
+  await refreshPropertyInfo();
+  await refreshGuestInvites();
 }
 
 async function refreshTenancies() {
@@ -259,6 +271,143 @@ document.getElementById('ownerMessageForm').addEventListener('submit', async (e)
   input.value = '';
   await refreshOwnerMessages();
 });
+
+// ============================================================
+// Property information + guest codes (owner)
+// ============================================================
+
+async function refreshPropertyInfo() {
+  const el = document.getElementById('ownerInfoList');
+  const { data: entries } = await sb.from('rental_property_info')
+    .select('*').eq('property_id', currentProperty.id)
+    .order('sort_order', { ascending: true });
+
+  if (!entries || entries.length === 0) {
+    el.innerHTML = `<span class="muted">${t('info.empty')}</span>`;
+    return;
+  }
+  el.innerHTML = entries.map(entry => `
+    <div class="list-item">
+      <div class="main">
+        <div class="title">${escapeHtml(entry.title)}</div>
+        ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
+      </div>
+      <span class="pill ${entry.visible_to_guests ? 'paid' : 'pending'}">
+        ${entry.visible_to_guests ? t('info.badgeGuest') : t('info.badgeTenantOnly')}
+      </span>
+      <button class="btn-small danger" data-delete-info="${entry.id}">${t('info.delete')}</button>
+    </div>`).join('');
+
+  el.querySelectorAll('[data-delete-info]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('info.deleteConfirm'))) return;
+      await sb.from('rental_property_info').delete().eq('id', btn.getAttribute('data-delete-info'));
+      await refreshPropertyInfo();
+    });
+  });
+}
+
+document.getElementById('infoForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { error } = await sb.from('rental_property_info').insert({
+    property_id: currentProperty.id,
+    title: document.getElementById('infoTitle').value.trim(),
+    body: document.getElementById('infoBody').value.trim() || null,
+    visible_to_guests: document.getElementById('infoVisibleToGuests').checked,
+    created_by: currentUser.id
+  });
+  if (error) { alert(t('error', { msg: error.message })); return; }
+  e.target.reset();
+  document.getElementById('infoVisibleToGuests').checked = true;
+  await refreshPropertyInfo();
+});
+
+function guestInviteStatus(invite) {
+  if (invite.revoked_at) return { key: 'gcode.statusRevoked', pill: 'low' };
+  if (invite.expires_at && new Date(invite.expires_at) <= new Date()) {
+    return { key: 'gcode.statusExpired', pill: 'pending' };
+  }
+  return { key: 'gcode.statusActive', pill: 'paid' };
+}
+
+async function refreshGuestInvites() {
+  const el = document.getElementById('guestInviteList');
+  const { data: invites } = await sb.from('rental_guest_invites')
+    .select('*').eq('property_id', currentProperty.id)
+    .order('created_at', { ascending: false });
+
+  if (!invites || invites.length === 0) {
+    el.innerHTML = `<span class="muted">${t('gcode.empty')}</span>`;
+    return;
+  }
+  el.innerHTML = invites.map(invite => {
+    const status = guestInviteStatus(invite);
+    return `
+    <div class="list-item">
+      <div class="main">
+        <div class="title"><code>${escapeHtml(invite.code)}</code></div>
+        <div class="sub">${invite.label ? escapeHtml(invite.label) + ' · ' : ''}${
+          invite.expires_at ? t('gcode.expiresOn', { date: fmtDate(invite.expires_at) }) : t('gcode.noExpiry')
+        }</div>
+      </div>
+      <span class="pill ${status.pill}">${t(status.key)}</span>
+      ${invite.revoked_at ? '' : `<button class="btn-small danger" data-revoke="${invite.id}">${t('gcode.revoke')}</button>`}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('[data-revoke]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('gcode.revokeConfirm'))) return;
+      await sb.from('rental_guest_invites')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('id', btn.getAttribute('data-revoke'));
+      await refreshGuestInvites();
+    });
+  });
+}
+
+document.getElementById('guestInviteForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const days = parseInt(document.getElementById('guestInviteDays').value, 10);
+  const expiresAt = Number.isFinite(days) && days > 0
+    ? new Date(Date.now() + days * 86400000).toISOString()
+    : null;
+  const { error } = await sb.from('rental_guest_invites').insert({
+    property_id: currentProperty.id,
+    label: document.getElementById('guestInviteLabel').value.trim() || null,
+    expires_at: expiresAt,
+    created_by: currentUser.id
+  });
+  if (error) { alert(t('error', { msg: error.message })); return; }
+  document.getElementById('guestInviteLabel').value = '';
+  await refreshGuestInvites();
+});
+
+// ============================================================
+// GUEST DASHBOARD
+// ============================================================
+
+async function loadGuestDashboard() {
+  document.getElementById('guestPropName').textContent = currentProperty.name;
+  document.getElementById('guestPropAddress').textContent = currentProperty.address || '';
+
+  const el = document.getElementById('guestInfoList');
+  const { data: entries } = await sb.from('rental_property_info')
+    .select('*').eq('property_id', currentProperty.id)
+    .order('sort_order', { ascending: true });
+
+  if (!entries || entries.length === 0) {
+    el.innerHTML = `<span class="muted">${t('guest.empty')}</span>`;
+    return;
+  }
+  el.innerHTML = entries.map(entry => `
+    <div class="list-item">
+      <div class="main">
+        <div class="title">${escapeHtml(entry.title)}</div>
+        ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
 
 // ============================================================
 // TENANT DASHBOARD
@@ -466,29 +615,36 @@ async function boot() {
   document.getElementById('userBox').hidden = false;
   document.getElementById('userEmail').textContent = currentUser.email;
 
-  const { data: membership } = await sb.from('rental_property_members')
-    .select('*').eq('user_id', currentUser.id).limit(1).maybeSingle();
+  // The summary is the source of truth for the role: it never exposes the
+  // invite code, and it drops guests whose access window has closed.
+  const { data: summaryRows } = await sb.rpc('rental_my_property_summary');
+  const summary = summaryRows && summaryRows[0];
 
-  if (!membership) {
+  if (!summary) {
     const { data: canCreate } = await sb.rpc('rental_can_create_property');
     document.getElementById('ownerOnboardCard').hidden = !canCreate;
     showView('view-onboarding');
     return;
   }
-  currentMembership = membership;
 
-  const { data: property } = await sb.from('rental_properties')
-    .select('*').eq('id', membership.property_id).single();
-  currentProperty = property;
+  currentMembership = { property_id: summary.property_id, role: summary.role };
+  currentProperty = { id: summary.property_id, name: summary.name, address: summary.address };
 
-  if (membership.role === 'owner') {
+  if (summary.role === 'owner') {
+    // Owners read the full row, which also carries the tenant invite code.
+    const { data: property } = await sb.from('rental_properties')
+      .select('*').eq('id', summary.property_id).single();
+    currentProperty = property;
     showView('view-owner');
     initTabs('#view-owner');
     await loadOwnerDashboard();
-  } else {
+  } else if (summary.role === 'tenant') {
     showView('view-tenant');
     initTabs('#view-tenant');
     await loadTenantDashboard();
+  } else {
+    showView('view-guest');
+    await loadGuestDashboard();
   }
 }
 

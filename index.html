@@ -64,6 +64,15 @@
           <button type="submit" class="btn-primary" data-i18n="onb.tenant.submit">Σύνδεση με το ακίνητο</button>
         </form>
       </div>
+      <div class="card">
+        <h2 data-i18n="onb.guest.title">Είμαι επισκέπτης</h2>
+        <p class="muted" data-i18n="onb.guest.hint">Έχεις κωδικό επισκέπτη; Δες τις βασικές πληροφορίες του χώρου.</p>
+        <form id="guestCodeForm">
+          <label data-i18n="onb.guest.codeLabel">Κωδικός επισκέπτη</label>
+          <input type="text" id="guestCodeInput" data-i18n-placeholder="onb.guest.codePlaceholder" placeholder="π.χ. G1H2J3K4L5" required>
+          <button type="submit" class="btn-primary" data-i18n="onb.guest.submit">Είσοδος ως επισκέπτης</button>
+        </form>
+      </div>
     </div>
     <p id="onboardingMsg" class="msg" hidden></p>
   </section>
@@ -86,6 +95,7 @@
       <button class="tab-btn" data-tab="payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="info" data-i18n="tab.info">Πληροφορίες</button>
     </nav>
 
     <div class="tab-panel" data-panel="tenancy">
@@ -185,6 +195,44 @@
         </form>
       </div>
     </div>
+
+    <div class="tab-panel" data-panel="info" hidden>
+      <div class="card">
+        <h2 data-i18n="info.formTitle">Νέα πληροφορία</h2>
+        <form id="infoForm">
+          <label data-i18n="info.title">Τίτλος</label>
+          <input type="text" id="infoTitle" data-i18n-placeholder="info.titlePlaceholder" placeholder="π.χ. Κωδικός εξώπορτας" required>
+          <label data-i18n="info.body">Περιεχόμενο</label>
+          <textarea id="infoBody" rows="2" data-i18n-placeholder="info.bodyPlaceholder" placeholder="π.χ. 1234#"></textarea>
+          <label class="check-row">
+            <input type="checkbox" id="infoVisibleToGuests" checked>
+            <span data-i18n="info.visibleToGuests">Ορατό και στους επισκέπτες</span>
+          </label>
+          <button type="submit" class="btn-primary" data-i18n="info.add">Προσθήκη</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2 data-i18n="info.listTitle">Πληροφορίες χώρου</h2>
+        <div id="ownerInfoList" class="list"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="gcode.title">Κωδικοί επισκεπτών</h2>
+        <form id="guestInviteForm">
+          <div class="form-row">
+            <div>
+              <label data-i18n="gcode.label">Περιγραφή (για εσένα)</label>
+              <input type="text" id="guestInviteLabel" data-i18n-placeholder="gcode.labelPlaceholder" placeholder="π.χ. Μαρία, Ιούλιος">
+            </div>
+            <div>
+              <label data-i18n="gcode.validDays">Ισχύς (ημέρες, κενό = χωρίς λήξη)</label>
+              <input type="number" id="guestInviteDays" min="1" step="1" value="7">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" data-i18n="gcode.create">Δημιουργία κωδικού</button>
+        </form>
+        <div id="guestInviteList" class="list"></div>
+      </div>
+    </div>
   </section>
 
   <!-- TENANT DASHBOARD -->
@@ -242,6 +290,20 @@
           <button type="submit" class="btn-primary" data-i18n="msg.send">Αποστολή</button>
         </form>
       </div>
+    </div>
+  </section>
+
+  <!-- GUEST DASHBOARD -->
+  <section id="view-guest" class="view" hidden>
+    <div class="dash-header">
+      <div>
+        <h1 id="guestPropName">—</h1>
+        <p class="muted" id="guestPropAddress"></p>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="guest.title">Πληροφορίες χώρου</h2>
+      <div id="guestInfoList" class="list"></div>
     </div>
   </section>
 
