@@ -178,3 +178,6 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 }
 .btn-secondary:hover{background:var(--line);}
 .soft-rule{border:none; border-top:1px solid var(--line); margin:22px 0 0;}
+
+.sub-head{font-size:1rem; margin:18px 0 4px;}
+#backToSignIn{margin-top:14px;}

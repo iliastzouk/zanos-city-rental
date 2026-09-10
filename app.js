@@ -106,12 +106,29 @@ document.getElementById('magicLinkBtn').addEventListener('click', async () => {
   else setMsg(msg, t('login.sent'), 'ok');
 });
 
-document.getElementById('createAccountBtn').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const msg = document.getElementById('loginMsg');
-  if (!email) { document.getElementById('loginEmail').reportValidity(); return; }
+function showSignupCard(show) {
+  document.getElementById('signinCard').hidden = show;
+  document.getElementById('signupCard').hidden = !show;
+  setMsg(document.getElementById('signupMsg'), '', '');
+  setMsg(document.getElementById('loginMsg'), '', '');
+}
+
+document.getElementById('createAccountBtn').addEventListener('click', () => {
+  // Carry over whatever they already typed, so it is not asked twice.
+  document.getElementById('signupEmail').value = document.getElementById('loginEmail').value.trim();
+  showSignupCard(true);
+});
+document.getElementById('backToSignIn').addEventListener('click', () => showSignupCard(false));
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const confirm = document.getElementById('signupConfirm').value;
+  const msg = document.getElementById('signupMsg');
+
   if (password.length < 8) { setMsg(msg, t('login.passwordTooShort'), 'error'); return; }
+  if (password !== confirm) { setMsg(msg, t('signup.mismatch'), 'error'); return; }
 
   setMsg(msg, t('login.creating'), '');
   const { data, error } = await sb.auth.signUp({
@@ -128,7 +145,8 @@ document.getElementById('createAccountBtn').addEventListener('click', async () =
     return;
   }
   if (data.session) { await boot(); return; }
-  setMsg(msg, t('login.created'), 'ok');
+  e.target.reset();
+  setMsg(msg, t('signup.checkEmail', { email }), 'ok');
 });
 
 // ---------- Setting a password ----------
