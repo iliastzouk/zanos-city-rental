@@ -35,7 +35,14 @@ h2{font-size:1.1rem;}
   display:flex; align-items:center; justify-content:space-between;
 }
 .brand{font-weight:700;}
+.topbar-actions{display:flex; align-items:center; gap:14px;}
 .user-box{display:flex; align-items:center; gap:12px; font-size:.85rem; color:var(--text-soft);}
+.btn-lang{
+  background:var(--bg-alt); border:1px solid var(--line); color:var(--text);
+  padding:5px 10px; border-radius:8px; font-size:.78rem; font-weight:700;
+  letter-spacing:.03em; cursor:pointer;
+}
+.btn-lang:hover{background:var(--line);}
 
 .view{ }
 
@@ -137,3 +144,7 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .message-form button{margin-top:0; white-space:nowrap;}
 
 [hidden]{display:none !important;}
+
+/* Invite codes are typed in uppercase, but the placeholder hint is not. */
+#inviteCodeInput{text-transform:uppercase;}
+#inviteCodeInput::placeholder{text-transform:none;}

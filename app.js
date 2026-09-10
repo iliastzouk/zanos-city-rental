@@ -6,18 +6,10 @@ const SUPABASE_URL = 'https://fwkchszqkosjyesmsvlj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_kjWHvwntT1U__wY_5K0F1w_cd_YhBT9';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const CATEGORY_LABELS = {
-  rent: 'Ενοίκιο',
-  common_expenses: 'Κοινόχρηστα',
-  internet: 'Internet',
-  deposit: 'Εγγύηση',
-  other: 'Άλλο'
-};
-const STATUS_LABELS = {
-  pending: 'Εκκρεμεί', paid: 'Πληρώθηκε', overdue: 'Καθυστερεί',
-  open: 'Ανοιχτό', in_progress: 'Σε εξέλιξη', resolved: 'Επιλύθηκε', closed: 'Έκλεισε'
-};
-const PRIORITY_LABELS = { low: 'Χαμηλή', medium: 'Μεσαία', high: 'Υψηλή', urgent: 'Επείγον' };
+// Enum values live in the DB in English; the labels come from the active language.
+const categoryLabel = (v) => t('cat.' + v);
+const statusLabel = (v) => t('st.' + v);
+const priorityLabel = (v) => t('pri.' + v);
 
 let currentUser = null;
 let currentMembership = null; // { property_id, role, ... }
@@ -37,10 +29,13 @@ function setMsg(el, text, kind) {
 
 function fmtDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('el-GR');
+  return new Date(d).toLocaleDateString(dateLocale());
 }
 function fmtMoney(n) {
   return '€' + Number(n).toFixed(2);
+}
+function fmtDateTime(d) {
+  return new Date(d).toLocaleString(dateLocale());
 }
 function escapeHtml(s) {
   const div = document.createElement('div');
@@ -75,10 +70,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const msg = document.getElementById('loginMsg');
-  setMsg(msg, 'Αποστολή...', '');
+  setMsg(msg, t('login.sending'), '');
   const { error } = await sendMagicLink(email);
-  if (error) setMsg(msg, 'Σφάλμα: ' + error.message, 'error');
-  else setMsg(msg, 'Έλεγξε το email σου για το link σύνδεσης.', 'ok');
+  if (error) setMsg(msg, t('error', { msg: error.message }), 'error');
+  else setMsg(msg, t('login.sent'), 'ok');
 });
 
 document.getElementById('signOutBtn').addEventListener('click', async () => {
@@ -92,14 +87,14 @@ document.getElementById('createPropertyForm').addEventListener('submit', async (
   const name = document.getElementById('propName').value.trim();
   const address = document.getElementById('propAddress').value.trim();
   const msg = document.getElementById('onboardingMsg');
-  setMsg(msg, 'Δημιουργία...', '');
+  setMsg(msg, t('onb.creating'), '');
   const { data: prop, error } = await sb.from('rental_properties')
     .insert({ name, address, created_by: currentUser.id })
     .select().single();
-  if (error) { setMsg(msg, 'Σφάλμα: ' + error.message, 'error'); return; }
+  if (error) { setMsg(msg, t('error', { msg: error.message }), 'error'); return; }
   const { error: memErr } = await sb.from('rental_property_members')
     .insert({ property_id: prop.id, user_id: currentUser.id, role: 'owner', display_name: currentUser.email });
-  if (memErr) { setMsg(msg, 'Σφάλμα: ' + memErr.message, 'error'); return; }
+  if (memErr) { setMsg(msg, t('error', { msg: memErr.message }), 'error'); return; }
   await boot();
 });
 
@@ -107,9 +102,9 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
   e.preventDefault();
   const code = document.getElementById('inviteCodeInput').value.trim();
   const msg = document.getElementById('onboardingMsg');
-  setMsg(msg, 'Σύνδεση...', '');
+  setMsg(msg, t('onb.joining'), '');
   const { error } = await sb.rpc('rental_join_property', { p_invite_code: code });
-  if (error) { setMsg(msg, 'Μη έγκυρος κωδικός.', 'error'); return; }
+  if (error) { setMsg(msg, t('onb.invalidCode'), 'error'); return; }
   await boot();
 });
 
@@ -141,32 +136,32 @@ async function refreshTenancies() {
     infoEl.innerHTML = `
       <div class="list-item">
         <div class="main">
-          <div class="title">${escapeHtml(active.tenant_name || 'Ενοικιαστής')}</div>
-          <div class="sub">${fmtDate(active.start_date)} → ${active.end_date ? fmtDate(active.end_date) : '—'} ·
-            Ενοίκιο ${fmtMoney(active.monthly_rent)}/μήνα</div>
+          <div class="title">${escapeHtml(active.tenant_name || t('tenancy.defaultTenant'))}</div>
+          <div class="sub">${fmtDate(active.start_date)} → ${active.end_date ? fmtDate(active.end_date) : t('dash')} ·
+            ${t('tenancy.rentLine', { amount: fmtMoney(active.monthly_rent) })}</div>
         </div>
-        <button class="btn-small danger" data-end-tenancy="${active.id}">Λήξη μίσθωσης</button>
+        <button class="btn-small danger" data-end-tenancy="${active.id}">${t('tenancy.endBtn')}</button>
       </div>`;
     infoEl.querySelector('[data-end-tenancy]').addEventListener('click', async (e) => {
-      if (!confirm('Να χαρακτηριστεί αυτή η μίσθωση ως ολοκληρωμένη;')) return;
+      if (!confirm(t('tenancy.endConfirm'))) return;
       await sb.from('rental_tenancies').update({ status: 'ended' }).eq('id', e.target.getAttribute('data-end-tenancy'));
       await refreshTenancies();
     });
   } else {
-    infoEl.innerHTML = '<span class="muted">Δεν υπάρχει ενεργή μίσθωση αυτή τη στιγμή.</span>';
+    infoEl.innerHTML = `<span class="muted">${t('tenancy.none')}</span>`;
   }
 
   const histEl = document.getElementById('tenancyHistory');
   if (!tenancies || tenancies.length === 0) {
-    histEl.innerHTML = '<span class="muted">Καμία καταχώρηση ακόμα.</span>';
+    histEl.innerHTML = `<span class="muted">${t('tenancy.historyEmpty')}</span>`;
   } else {
-    histEl.innerHTML = tenancies.map(t => `
+    histEl.innerHTML = tenancies.map(item => `
       <div class="list-item">
         <div class="main">
-          <div class="title">${escapeHtml(t.tenant_name || 'Ενοικιαστής')}</div>
-          <div class="sub">${fmtDate(t.start_date)} → ${t.end_date ? fmtDate(t.end_date) : '—'} · ${fmtMoney(t.monthly_rent)}/μήνα</div>
+          <div class="title">${escapeHtml(item.tenant_name || t('tenancy.defaultTenant'))}</div>
+          <div class="sub">${fmtDate(item.start_date)} → ${item.end_date ? fmtDate(item.end_date) : t('dash')} · ${t('tenancy.rentLine', { amount: fmtMoney(item.monthly_rent) })}</div>
         </div>
-        <span class="pill ${t.status === 'active' ? 'paid' : 'pending'}">${t.status === 'active' ? 'Ενεργή' : 'Ολοκληρώθηκε'}</span>
+        <span class="pill ${item.status === 'active' ? 'paid' : 'pending'}">${item.status === 'active' ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
       </div>`).join('');
   }
 }
@@ -185,7 +180,7 @@ document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
     created_by: currentUser.id
   };
   const { error } = await sb.from('rental_tenancies').insert(payload);
-  if (error) { alert('Σφάλμα: ' + error.message); return; }
+  if (error) { alert(t('error', { msg: error.message })); return; }
   e.target.reset();
   await refreshTenancies();
 });
@@ -193,7 +188,7 @@ document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
 async function refreshOwnerPayments() {
   const listEl = document.getElementById('ownerPaymentsList');
   if (!currentTenancy) {
-    listEl.innerHTML = '<span class="muted">Χρειάζεται ενεργή μίσθωση πρώτα.</span>';
+    listEl.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
   const { data: payments } = await sb.from('rental_payments')
@@ -201,17 +196,17 @@ async function refreshOwnerPayments() {
     .order('due_date', { ascending: false, nullsFirst: false });
 
   if (!payments || payments.length === 0) {
-    listEl.innerHTML = '<span class="muted">Καμία πληρωμή ακόμα.</span>';
+    listEl.innerHTML = `<span class="muted">${t('pay.empty')}</span>`;
     return;
   }
   listEl.innerHTML = payments.map(p => `
     <div class="list-item">
       <div class="main">
-        <div class="title">${CATEGORY_LABELS[p.category]} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}Προθεσμία: ${fmtDate(p.due_date)}${p.paid_on ? ' · Πληρώθηκε: ' + fmtDate(p.paid_on) : ''}</div>
+        <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
+        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
       </div>
-      <span class="pill ${p.status}">${STATUS_LABELS[p.status]}</span>
-      ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">Σήμανση ως πληρωμένο</button>` : ''}
+      <span class="pill ${p.status}">${statusLabel(p.status)}</span>
+      ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
     </div>`).join('');
 
   listEl.querySelectorAll('[data-mark-paid]').forEach(btn => {
@@ -225,7 +220,7 @@ async function refreshOwnerPayments() {
 
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert('Χρειάζεται ενεργή μίσθωση πρώτα.'); return; }
+  if (!currentTenancy) { alert(t('need.tenancyFirst')); return; }
   const payload = {
     tenancy_id: currentTenancy.id,
     category: document.getElementById('paymentCategory').value,
@@ -235,7 +230,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
     created_by: currentUser.id
   };
   const { error } = await sb.from('rental_payments').insert(payload);
-  if (error) { alert('Σφάλμα: ' + error.message); return; }
+  if (error) { alert(t('error', { msg: error.message })); return; }
   e.target.reset();
   await refreshOwnerPayments();
 });
@@ -246,7 +241,7 @@ async function refreshOwnerMaintenance() {
 
 async function refreshOwnerMessages() {
   if (!currentTenancy) {
-    document.getElementById('ownerMessagesList').innerHTML = '<span class="muted">Χρειάζεται ενεργή μίσθωση πρώτα.</span>';
+    document.getElementById('ownerMessagesList').innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
   await renderMessages('ownerMessagesList', currentTenancy.id);
@@ -254,7 +249,7 @@ async function refreshOwnerMessages() {
 
 document.getElementById('ownerMessageForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert('Χρειάζεται ενεργή μίσθωση πρώτα.'); return; }
+  if (!currentTenancy) { alert(t('need.tenancyFirst')); return; }
   const input = document.getElementById('ownerMessageInput');
   await sb.from('rental_messages').insert({ tenancy_id: currentTenancy.id, author_id: currentUser.id, body: input.value.trim() });
   input.value = '';
@@ -273,9 +268,13 @@ async function loadTenantDashboard() {
 
   const infoEl = document.getElementById('tenantLeaseInfo');
   if (tenancy) {
-    infoEl.textContent = `Ενοίκιο ${fmtMoney(tenancy.monthly_rent)}/μήνα · ${fmtDate(tenancy.start_date)} → ${tenancy.end_date ? fmtDate(tenancy.end_date) : '—'}`;
+    infoEl.textContent = t('tenant.leaseLine', {
+      rent: fmtMoney(tenancy.monthly_rent),
+      start: fmtDate(tenancy.start_date),
+      end: tenancy.end_date ? fmtDate(tenancy.end_date) : t('dash')
+    });
   } else {
-    infoEl.textContent = 'Δεν υπάρχει ενεργή μίσθωση συνδεδεμένη με τον λογαριασμό σου ακόμα.';
+    infoEl.textContent = t('tenant.noActiveAccount');
   }
 
   await refreshTenantPayments();
@@ -285,27 +284,27 @@ async function loadTenantDashboard() {
 
 async function refreshTenantPayments() {
   const listEl = document.getElementById('tenantPaymentsList');
-  if (!currentTenancy) { listEl.innerHTML = '<span class="muted">Καμία ενεργή μίσθωση.</span>'; return; }
+  if (!currentTenancy) { listEl.innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`; return; }
   const { data: payments } = await sb.from('rental_payments')
     .select('*').eq('tenancy_id', currentTenancy.id)
     .order('due_date', { ascending: false, nullsFirst: false });
   if (!payments || payments.length === 0) {
-    listEl.innerHTML = '<span class="muted">Καμία πληρωμή ακόμα.</span>';
+    listEl.innerHTML = `<span class="muted">${t('pay.empty')}</span>`;
     return;
   }
   listEl.innerHTML = payments.map(p => `
     <div class="list-item">
       <div class="main">
-        <div class="title">${CATEGORY_LABELS[p.category]} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}Προθεσμία: ${fmtDate(p.due_date)}${p.paid_on ? ' · Πληρώθηκε: ' + fmtDate(p.paid_on) : ''}</div>
+        <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
+        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
       </div>
-      <span class="pill ${p.status}">${STATUS_LABELS[p.status]}</span>
+      <span class="pill ${p.status}">${statusLabel(p.status)}</span>
     </div>`).join('');
 }
 
 document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert('Χρειάζεται ενεργή μίσθωση για να στείλεις αναφορά.'); return; }
+  if (!currentTenancy) { alert(t('need.tenancyReport')); return; }
   const payload = {
     tenancy_id: currentTenancy.id,
     title: document.getElementById('maintTitle').value.trim(),
@@ -314,7 +313,7 @@ document.getElementById('maintenanceForm').addEventListener('submit', async (e) 
     created_by: currentUser.id
   };
   const { error } = await sb.from('rental_maintenance_requests').insert(payload);
-  if (error) { alert('Σφάλμα: ' + error.message); return; }
+  if (error) { alert(t('error', { msg: error.message })); return; }
   e.target.reset();
   await refreshTenantMaintenance();
 });
@@ -325,7 +324,7 @@ async function refreshTenantMaintenance() {
 
 async function refreshTenantMessages() {
   if (!currentTenancy) {
-    document.getElementById('tenantMessagesList').innerHTML = '<span class="muted">Καμία ενεργή μίσθωση.</span>';
+    document.getElementById('tenantMessagesList').innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`;
     return;
   }
   await renderMessages('tenantMessagesList', currentTenancy.id);
@@ -333,7 +332,7 @@ async function refreshTenantMessages() {
 
 document.getElementById('tenantMessageForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert('Καμία ενεργή μίσθωση.'); return; }
+  if (!currentTenancy) { alert(t('need.noActiveTenancy')); return; }
   const input = document.getElementById('tenantMessageInput');
   await sb.from('rental_messages').insert({ tenancy_id: currentTenancy.id, author_id: currentUser.id, body: input.value.trim() });
   input.value = '';
@@ -348,15 +347,15 @@ async function renderMaintenanceList(containerId, isOwner) {
   const el = document.getElementById(containerId);
   let query = sb.from('rental_maintenance_requests').select('*').order('created_at', { ascending: false });
   if (!isOwner) {
-    if (!currentTenancy) { el.innerHTML = '<span class="muted">Καμία ενεργή μίσθωση.</span>'; return; }
+    if (!currentTenancy) { el.innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`; return; }
     query = query.eq('tenancy_id', currentTenancy.id);
   } else {
-    if (!currentTenancy) { el.innerHTML = '<span class="muted">Χρειάζεται ενεργή μίσθωση.</span>'; return; }
+    if (!currentTenancy) { el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`; return; }
     query = query.eq('tenancy_id', currentTenancy.id);
   }
   const { data: requests } = await query;
   if (!requests || requests.length === 0) {
-    el.innerHTML = '<span class="muted">Καμία αναφορά ακόμα.</span>';
+    el.innerHTML = `<span class="muted">${t('maint.empty')}</span>`;
     return;
   }
 
@@ -368,21 +367,21 @@ async function renderMaintenanceList(containerId, isOwner) {
           <div class="sub">${fmtDate(r.created_at)}</div>
         </div>
         <div>
-          <span class="pill ${r.priority}">${PRIORITY_LABELS[r.priority]}</span>
-          <span class="pill ${r.status}">${STATUS_LABELS[r.status]}</span>
+          <span class="pill ${r.priority}">${priorityLabel(r.priority)}</span>
+          <span class="pill ${r.status}">${statusLabel(r.status)}</span>
         </div>
       </div>
       ${r.description ? `<div class="desc">${escapeHtml(r.description)}</div>` : ''}
       ${isOwner ? `
         <div class="status-actions">
           ${['open', 'in_progress', 'resolved', 'closed'].map(s => `
-            <button class="btn-small" data-set-status="${s}" ${r.status === s ? 'disabled' : ''}>${STATUS_LABELS[s]}</button>
+            <button class="btn-small" data-set-status="${s}" ${r.status === s ? 'disabled' : ''}>${statusLabel(s)}</button>
           `).join('')}
         </div>` : ''}
       <div class="comments" data-comments></div>
       <form class="comment-form" data-comment-form>
-        <input type="text" placeholder="Σχόλιο…" required>
-        <button type="submit" class="btn-small">Απάντηση</button>
+        <input type="text" placeholder="${t('maint.commentPlaceholder')}" required>
+        <button type="submit" class="btn-small">${t('maint.reply')}</button>
       </form>
     </div>
   `).join('');
@@ -420,7 +419,7 @@ async function loadComments(card, requestId) {
   if (!comments || comments.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = comments.map(c => `
     <div class="comment">
-      <span class="author">${c.author_id === currentUser.id ? 'Εσύ' : 'Ο άλλος'}:</span>
+      <span class="author">${c.author_id === currentUser.id ? t('maint.you') : t('maint.other')}:</span>
       ${escapeHtml(c.body)}
     </div>`).join('');
 }
@@ -434,13 +433,13 @@ async function renderMessages(containerId, tenancyId) {
   const { data: messages } = await sb.from('rental_messages')
     .select('*').eq('tenancy_id', tenancyId).order('created_at', { ascending: true });
   if (!messages || messages.length === 0) {
-    el.innerHTML = '<span class="muted">Δεν υπάρχουν μηνύματα ακόμα.</span>';
+    el.innerHTML = `<span class="muted">${t('msg.empty')}</span>`;
     return;
   }
   el.innerHTML = messages.map(m => `
     <div class="message-bubble ${m.author_id === currentUser.id ? 'mine' : 'theirs'}">
       ${escapeHtml(m.body)}
-      <div class="meta">${new Date(m.created_at).toLocaleString('el-GR')}</div>
+      <div class="meta">${fmtDateTime(m.created_at)}</div>
     </div>`).join('');
   el.scrollTop = el.scrollHeight;
 }
@@ -490,5 +489,10 @@ async function boot() {
 sb.auth.onAuthStateChange((_event, _session) => {
   boot();
 });
+
+// ---------- Language ----------
+// i18n.js repaints the static labels and owns the switcher; here we re-render
+// the data-driven lists so they pick up the new language too.
+document.addEventListener('langchange', () => { boot(); });
 
 boot();
