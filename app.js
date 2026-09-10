@@ -59,6 +59,8 @@ function initTabs(scopeSelector) {
 }
 
 // ---------- Auth ----------
+const GUEST_CODE_KEY = 'zanos_guest_code';
+
 async function sendMagicLink(email) {
   return sb.auth.signInWithOtp({
     email,
@@ -66,14 +68,50 @@ async function sendMagicLink(email) {
   });
 }
 
+// Supabase reports these as prose; map the two we expect onto our own wording.
+function authErrorText(error) {
+  const raw = (error.message || '').toLowerCase();
+  if (raw.includes('invalid login credentials')) return t('login.badCredentials');
+  if (raw.includes('rate limit')) return t('login.rateLimited');
+  return t('error', { msg: error.message });
+}
+
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
   const msg = document.getElementById('loginMsg');
+  if (!password) { setMsg(msg, t('login.badCredentials'), 'error'); return; }
+  setMsg(msg, '', '');
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { setMsg(msg, authErrorText(error), 'error'); return; }
+  await boot();
+});
+
+document.getElementById('magicLinkBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const msg = document.getElementById('loginMsg');
+  if (!email) { document.getElementById('loginEmail').reportValidity(); return; }
   setMsg(msg, t('login.sending'), '');
   const { error } = await sendMagicLink(email);
-  if (error) setMsg(msg, t('error', { msg: error.message }), 'error');
+  if (error) setMsg(msg, authErrorText(error), 'error');
   else setMsg(msg, t('login.sent'), 'ok');
+});
+
+// ---------- Setting a password ----------
+document.getElementById('passwordToggle').addEventListener('click', () => {
+  const panel = document.getElementById('passwordPanel');
+  panel.hidden = !panel.hidden;
+});
+
+document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('passwordMsg');
+  setMsg(msg, t('account.saving'), '');
+  const { error } = await sb.auth.updateUser({ password: document.getElementById('newPassword').value });
+  if (error) { setMsg(msg, t('error', { msg: error.message }), 'error'); return; }
+  e.target.reset();
+  setMsg(msg, t('account.saved'), 'ok');
 });
 
 document.getElementById('signOutBtn').addEventListener('click', async () => {
@@ -115,11 +153,20 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
 document.getElementById('guestCodeForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const code = document.getElementById('guestCodeInput').value.trim();
-  const msg = document.getElementById('onboardingMsg');
+  const msg = document.getElementById('guestMsg');
   setMsg(msg, t('onb.guest.redeeming'), '');
-  const { error } = await sb.rpc('rental_redeem_guest_code', { p_code: code });
-  if (error) { setMsg(msg, t('onb.guest.invalid'), 'error'); return; }
-  await boot();
+  if (await showGuestView(code)) {
+    localStorage.setItem(GUEST_CODE_KEY, code);
+    setMsg(msg, '', '');
+  } else {
+    setMsg(msg, t('onb.guest.invalid'), 'error');
+  }
+});
+
+document.getElementById('guestExitBtn').addEventListener('click', () => {
+  localStorage.removeItem(GUEST_CODE_KEY);
+  document.getElementById('guestCodeInput').value = '';
+  boot();
 });
 
 // ============================================================
@@ -406,10 +453,32 @@ async function renderInfoList(containerId) {
     </div>`).join('');
 }
 
-async function loadGuestDashboard() {
-  document.getElementById('guestPropName').textContent = currentProperty.name;
-  document.getElementById('guestPropAddress').textContent = currentProperty.address || '';
-  await renderInfoList('guestInfoList');
+// Returns false for an unknown, revoked or expired code so the caller can
+// tell the visitor, rather than dropping them on an empty page.
+async function showGuestView(code) {
+  const { data: rows, error } = await sb.rpc('rental_guest_view', { p_code: code });
+  if (error || !rows || rows.length === 0) return false;
+
+  document.getElementById('guestPropName').textContent = rows[0].property_name;
+  document.getElementById('guestPropAddress').textContent = rows[0].property_address || '';
+
+  const entries = rows.filter(r => r.entry_title);
+  const el = document.getElementById('guestInfoList');
+  el.innerHTML = entries.length === 0
+    ? `<span class="muted">${t('guest.empty')}</span>`
+    : entries.map(r => `
+      <div class="list-item">
+        <div class="main">
+          <div class="title">${escapeHtml(r.entry_title)}</div>
+          ${r.entry_body ? `<div class="sub">${escapeHtml(r.entry_body)}</div>` : ''}
+        </div>
+      </div>`).join('');
+
+  document.getElementById('userBox').hidden = true;
+  document.getElementById('guestBox').hidden = false;
+  document.getElementById('passwordPanel').hidden = true;
+  showView('view-guest');
+  return true;
 }
 
 // ============================================================
@@ -608,9 +677,17 @@ async function renderMessages(containerId, tenancyId) {
 async function boot() {
   showView('view-loading');
 
+  document.getElementById('guestBox').hidden = true;
+
   const { data: { session } } = await sb.auth.getSession();
   if (!session) {
+    currentUser = null;
     document.getElementById('userBox').hidden = true;
+    document.getElementById('passwordPanel').hidden = true;
+    // A guest is identified by their code alone, with no account at all.
+    const savedCode = localStorage.getItem(GUEST_CODE_KEY);
+    if (savedCode && await showGuestView(savedCode)) return;
+    localStorage.removeItem(GUEST_CODE_KEY);
     showView('view-login');
     return;
   }
@@ -642,13 +719,10 @@ async function boot() {
     showView('view-owner');
     initTabs('#view-owner');
     await loadOwnerDashboard();
-  } else if (summary.role === 'tenant') {
+  } else {
     showView('view-tenant');
     initTabs('#view-tenant');
     await loadTenantDashboard();
-  } else {
-    showView('view-guest');
-    await loadGuestDashboard();
   }
 }
 

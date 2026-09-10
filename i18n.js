@@ -16,11 +16,32 @@ const TRANSLATIONS = {
     'lang.other': 'EN',
 
     'login.title': 'Σύνδεση',
-    'login.hint': 'Θα σου στείλουμε ένα link σύνδεσης στο email σου — χωρίς κωδικό.',
+    'login.hint': 'Μπες με τον κωδικό σου, ή ζήτα link σύνδεσης στο email.',
     'login.emailPlaceholder': 'you@email.com',
     'login.submit': 'Στείλε μου link σύνδεσης',
     'login.sending': 'Αποστολή...',
     'login.sent': 'Έλεγξε το email σου για το link σύνδεσης.',
+
+    'login.passwordLabel': 'Κωδικός πρόσβασης',
+    'login.passwordPlaceholder': 'Ο κωδικός σου',
+    'login.signIn': 'Σύνδεση',
+    'login.magicLink': 'Στείλε μου link σύνδεσης',
+    'login.magicHint': 'Δεν έχεις κωδικό; Ζήτα link σύνδεσης στο email και όρισε κωδικό αφού μπεις.',
+    'login.badCredentials': 'Λάθος email ή κωδικός.',
+    'login.rateLimited': 'Στάλθηκαν πολλά link σύνδεσης. Δοκίμασε ξανά σε λίγο ή μπες με κωδικό.',
+    'login.guestTitle': 'Είσοδος επισκέπτη',
+    'login.guestHint': 'Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ\' τον εδώ.',
+
+    'account.button': 'Κωδικός',
+    'account.title': 'Ορισμός κωδικού πρόσβασης',
+    'account.hint': 'Όρισε κωδικό για να μπαίνεις χωρίς να περιμένεις email.',
+    'account.newPassword': 'Νέος κωδικός (τουλάχιστον 8 χαρακτήρες)',
+    'account.save': 'Αποθήκευση κωδικού',
+    'account.saving': 'Αποθήκευση...',
+    'account.saved': 'Ο κωδικός αποθηκεύτηκε. Από εδώ και πέρα μπορείς να μπαίνεις με αυτόν.',
+
+    'guest.exit': 'Έξοδος',
+    'guest.badge': 'Προβολή επισκέπτη',
 
     'loading': 'Φόρτωση…',
 
@@ -183,11 +204,32 @@ const TRANSLATIONS = {
     'lang.other': 'ΕΛ',
 
     'login.title': 'Sign in',
-    'login.hint': 'We\'ll email you a sign-in link — no password needed.',
+    'login.hint': 'Sign in with your password, or get a sign-in link by email.',
     'login.emailPlaceholder': 'you@email.com',
     'login.submit': 'Email me a sign-in link',
     'login.sending': 'Sending...',
     'login.sent': 'Check your email for the sign-in link.',
+
+    'login.passwordLabel': 'Password',
+    'login.passwordPlaceholder': 'Your password',
+    'login.signIn': 'Sign in',
+    'login.magicLink': 'Email me a sign-in link',
+    'login.magicHint': 'No password yet? Get a sign-in link by email, then set one once you are in.',
+    'login.badCredentials': 'Wrong email or password.',
+    'login.rateLimited': 'Too many sign-in links sent. Try again shortly, or sign in with a password.',
+    'login.guestTitle': 'Guest access',
+    'login.guestHint': 'Got a guest code? No account needed — enter it here.',
+
+    'account.button': 'Password',
+    'account.title': 'Set a password',
+    'account.hint': 'Set a password so you can sign in without waiting for an email.',
+    'account.newPassword': 'New password (at least 8 characters)',
+    'account.save': 'Save password',
+    'account.saving': 'Saving...',
+    'account.saved': 'Password saved. You can sign in with it from now on.',
+
+    'guest.exit': 'Exit',
+    'guest.badge': 'Guest view',
 
     'loading': 'Loading…',
 

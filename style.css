@@ -146,10 +146,14 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 [hidden]{display:none !important;}
 
 /* Invite codes are typed in uppercase, but the placeholder hint is not. */
-#inviteCodeInput{text-transform:uppercase;}
-#inviteCodeInput::placeholder{text-transform:none;}
+#inviteCodeInput, #guestCodeInput{text-transform:uppercase;}
+#inviteCodeInput::placeholder, #guestCodeInput::placeholder{text-transform:none;}
 
 /* Checkbox sits inline with its label, unlike the stacked form fields. */
 .check-row{display:flex; align-items:center; gap:8px; margin:14px 0 0; font-weight:500;}
 .check-row input[type=checkbox]{width:auto; margin:0;}
 .list-item code{background:var(--bg-alt); padding:2px 8px; border-radius:6px; letter-spacing:.08em;}
+
+/* Sits between the sign-in form and the magic-link fallback button. */
+.small-note{margin:18px 0 8px; font-size:.85rem;}
+.center-card + .center-card{margin-top:18px;}

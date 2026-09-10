@@ -15,13 +15,30 @@
       <button id="langToggle" class="btn-lang" type="button" data-i18n="lang.other">EN</button>
       <div id="userBox" class="user-box" hidden>
         <span id="userEmail"></span>
+        <button id="passwordToggle" class="btn-link" data-i18n="account.button">Κωδικός</button>
         <button id="signOutBtn" class="btn-link" data-i18n="signOut">Αποσύνδεση</button>
+      </div>
+      <div id="guestBox" class="user-box" hidden>
+        <span class="pill paid" data-i18n="guest.badge">Προβολή επισκέπτη</span>
+        <button id="guestExitBtn" class="btn-link" data-i18n="guest.exit">Έξοδος</button>
       </div>
     </div>
   </div>
 </header>
 
 <main id="app" class="wrap">
+
+  <!-- SET PASSWORD (available to any signed-in user) -->
+  <div id="passwordPanel" class="card" hidden>
+    <h2 data-i18n="account.title">Ορισμός κωδικού πρόσβασης</h2>
+    <p class="muted" data-i18n="account.hint">Όρισε κωδικό για να μπαίνεις χωρίς να περιμένεις email.</p>
+    <form id="passwordForm">
+      <label data-i18n="account.newPassword">Νέος κωδικός (τουλάχιστον 8 χαρακτήρες)</label>
+      <input type="password" id="newPassword" minlength="8" required autocomplete="new-password">
+      <button type="submit" class="btn-primary" data-i18n="account.save">Αποθήκευση κωδικού</button>
+    </form>
+    <p id="passwordMsg" class="msg" hidden></p>
+  </div>
 
   <!-- LOGIN VIEW -->
   <section id="view-login" class="view">
@@ -30,9 +47,23 @@
       <p class="muted" data-i18n="login.hint">Θα σου στείλουμε ένα link σύνδεσης στο email σου — χωρίς κωδικό.</p>
       <form id="loginForm">
         <input type="email" id="loginEmail" data-i18n-placeholder="login.emailPlaceholder" placeholder="you@email.com" required autocomplete="email">
-        <button type="submit" class="btn-primary" data-i18n="login.submit">Στείλε μου link σύνδεσης</button>
+        <label data-i18n="login.passwordLabel">Κωδικός πρόσβασης</label>
+        <input type="password" id="loginPassword" data-i18n-placeholder="login.passwordPlaceholder" placeholder="Ο κωδικός σου" autocomplete="current-password">
+        <button type="submit" class="btn-primary" data-i18n="login.signIn">Σύνδεση</button>
       </form>
+      <p class="muted small-note" data-i18n="login.magicHint">Δεν έχεις κωδικό; Ζήτα link σύνδεσης στο email.</p>
+      <button id="magicLinkBtn" class="btn-small" type="button" data-i18n="login.magicLink">Στείλε μου link σύνδεσης</button>
       <p id="loginMsg" class="msg" hidden></p>
+    </div>
+
+    <div class="card center-card">
+      <h2 data-i18n="login.guestTitle">Είσοδος επισκέπτη</h2>
+      <p class="muted" data-i18n="login.guestHint">Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ' τον εδώ.</p>
+      <form id="guestCodeForm">
+        <input type="text" id="guestCodeInput" data-i18n-placeholder="onb.guest.codePlaceholder" placeholder="π.χ. G1H2J3K4L5" required>
+        <button type="submit" class="btn-primary" data-i18n="onb.guest.submit">Είσοδος ως επισκέπτης</button>
+      </form>
+      <p id="guestMsg" class="msg" hidden></p>
     </div>
   </section>
 
@@ -62,15 +93,6 @@
           <label data-i18n="onb.tenant.codeLabel">Κωδικός πρόσκλησης</label>
           <input type="text" id="inviteCodeInput" data-i18n-placeholder="onb.tenant.codePlaceholder" placeholder="π.χ. A1B2C3D4E5" required>
           <button type="submit" class="btn-primary" data-i18n="onb.tenant.submit">Σύνδεση με το ακίνητο</button>
-        </form>
-      </div>
-      <div class="card">
-        <h2 data-i18n="onb.guest.title">Είμαι επισκέπτης</h2>
-        <p class="muted" data-i18n="onb.guest.hint">Έχεις κωδικό επισκέπτη; Δες τις βασικές πληροφορίες του χώρου.</p>
-        <form id="guestCodeForm">
-          <label data-i18n="onb.guest.codeLabel">Κωδικός επισκέπτη</label>
-          <input type="text" id="guestCodeInput" data-i18n-placeholder="onb.guest.codePlaceholder" placeholder="π.χ. G1H2J3K4L5" required>
-          <button type="submit" class="btn-primary" data-i18n="onb.guest.submit">Είσοδος ως επισκέπτης</button>
         </form>
       </div>
     </div>
