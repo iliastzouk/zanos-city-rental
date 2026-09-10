@@ -43,6 +43,14 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+// In every thread there are exactly two sides: the signed-in user and whoever
+// holds the other role on the property.
+function otherPartyLabel() {
+  return currentMembership && currentMembership.role === 'owner'
+    ? t('party.tenant')
+    : t('party.owner');
+}
+
 // ---------- Tabs ----------
 function initTabs(scopeSelector) {
   const scope = document.querySelector(scopeSelector);
@@ -81,7 +89,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const msg = document.getElementById('loginMsg');
-  if (!password) { setMsg(msg, t('login.badCredentials'), 'error'); return; }
+  if (!password) { setMsg(msg, t('login.passwordRequired'), 'error'); return; }
   setMsg(msg, '', '');
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { setMsg(msg, authErrorText(error), 'error'); return; }
@@ -96,6 +104,31 @@ document.getElementById('magicLinkBtn').addEventListener('click', async () => {
   const { error } = await sendMagicLink(email);
   if (error) setMsg(msg, authErrorText(error), 'error');
   else setMsg(msg, t('login.sent'), 'ok');
+});
+
+document.getElementById('createAccountBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginMsg');
+  if (!email) { document.getElementById('loginEmail').reportValidity(); return; }
+  if (password.length < 8) { setMsg(msg, t('login.passwordTooShort'), 'error'); return; }
+
+  setMsg(msg, t('login.creating'), '');
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) { setMsg(msg, authErrorText(error), 'error'); return; }
+
+  // Supabase does not reveal existing addresses through an error; it returns a
+  // user with no identities instead.
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    setMsg(msg, t('login.accountExists'), 'error');
+    return;
+  }
+  if (data.session) { await boot(); return; }
+  setMsg(msg, t('login.created'), 'ok');
 });
 
 // ---------- Setting a password ----------
@@ -645,8 +678,9 @@ async function loadComments(card, requestId) {
   if (!comments || comments.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = comments.map(c => `
     <div class="comment">
-      <span class="author">${c.author_id === currentUser.id ? t('maint.you') : t('maint.other')}:</span>
-      ${escapeHtml(c.body)}
+      <span class="author">${c.author_id === currentUser.id ? t('party.you') : otherPartyLabel()}</span>
+      <span class="comment-time">${fmtDateTime(c.created_at)}</span>
+      <div class="comment-body">${escapeHtml(c.body)}</div>
     </div>`).join('');
 }
 
@@ -662,11 +696,15 @@ async function renderMessages(containerId, tenancyId) {
     el.innerHTML = `<span class="muted">${t('msg.empty')}</span>`;
     return;
   }
-  el.innerHTML = messages.map(m => `
-    <div class="message-bubble ${m.author_id === currentUser.id ? 'mine' : 'theirs'}">
+  el.innerHTML = messages.map(m => {
+    const mine = m.author_id === currentUser.id;
+    return `
+    <div class="message-bubble ${mine ? 'mine' : 'theirs'}">
+      <div class="sender">${mine ? t('party.you') : otherPartyLabel()}</div>
       ${escapeHtml(m.body)}
       <div class="meta">${fmtDateTime(m.created_at)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   el.scrollTop = el.scrollHeight;
 }
 
@@ -715,7 +753,9 @@ async function boot() {
     // Owners read the full row, which also carries the tenant invite code.
     const { data: property } = await sb.from('rental_properties')
       .select('*').eq('id', summary.property_id).single();
-    currentProperty = property;
+    // Keep the summary values if that read comes back empty, rather than
+    // blanking the whole dashboard on a null.
+    currentProperty = property || currentProperty;
     showView('view-owner');
     initTabs('#view-owner');
     await loadOwnerDashboard();

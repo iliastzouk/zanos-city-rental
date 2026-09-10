@@ -16,7 +16,7 @@ const TRANSLATIONS = {
     'lang.other': 'EN',
 
     'login.title': 'Σύνδεση',
-    'login.hint': 'Μπες με τον κωδικό σου, ή ζήτα link σύνδεσης στο email.',
+    'login.hint': 'Μπες με email και κωδικό. Αν δεν έχεις λογαριασμό, φτιάξε έναν.',
     'login.emailPlaceholder': 'you@email.com',
     'login.submit': 'Στείλε μου link σύνδεσης',
     'login.sending': 'Αποστολή...',
@@ -31,6 +31,19 @@ const TRANSLATIONS = {
     'login.rateLimited': 'Στάλθηκαν πολλά link σύνδεσης. Δοκίμασε ξανά σε λίγο ή μπες με κωδικό.',
     'login.guestTitle': 'Είσοδος επισκέπτη',
     'login.guestHint': 'Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ\' τον εδώ.',
+
+    'login.createAccount': 'Δημιουργία νέου λογαριασμού',
+    'login.created': 'Ο λογαριασμός δημιουργήθηκε. Έλεγξε το email σου για επιβεβαίωση.',
+    'login.accountExists': 'Υπάρχει ήδη λογαριασμός με αυτό το email. Μπες με τον κωδικό σου ή ζήτα link σύνδεσης.',
+    'login.passwordTooShort': 'Ο κωδικός θέλει τουλάχιστον 8 χαρακτήρες.',
+    'login.passwordRequired': 'Συμπλήρωσε τον κωδικό σου.',
+    'login.creating': 'Δημιουργία λογαριασμού...',
+    'login.orSeparator': 'ή',
+    'login.existingNoPassword': 'Έχεις ήδη λογαριασμό αλλά όχι κωδικό; Ζήτα link σύνδεσης και όρισε κωδικό από το κουμπί «Κωδικός» μόλις μπεις.',
+
+    'party.you': 'Εσύ',
+    'party.owner': 'Ιδιοκτήτης',
+    'party.tenant': 'Ενοικιαστής',
 
     'account.button': 'Κωδικός',
     'account.title': 'Ορισμός κωδικού πρόσβασης',
@@ -157,8 +170,6 @@ const TRANSLATIONS = {
     'maint.empty': 'Καμία αναφορά ακόμα.',
     'maint.commentPlaceholder': 'Σχόλιο…',
     'maint.reply': 'Απάντηση',
-    'maint.you': 'Εσύ',
-    'maint.other': 'Ο άλλος',
 
     'msg.ownerTitle': 'Μηνύματα με τον ενοικιαστή',
     'msg.tenantTitle': 'Μηνύματα με τον ιδιοκτήτη',
@@ -204,7 +215,7 @@ const TRANSLATIONS = {
     'lang.other': 'ΕΛ',
 
     'login.title': 'Sign in',
-    'login.hint': 'Sign in with your password, or get a sign-in link by email.',
+    'login.hint': 'Sign in with your email and password. No account yet? Create one.',
     'login.emailPlaceholder': 'you@email.com',
     'login.submit': 'Email me a sign-in link',
     'login.sending': 'Sending...',
@@ -219,6 +230,19 @@ const TRANSLATIONS = {
     'login.rateLimited': 'Too many sign-in links sent. Try again shortly, or sign in with a password.',
     'login.guestTitle': 'Guest access',
     'login.guestHint': 'Got a guest code? No account needed — enter it here.',
+
+    'login.createAccount': 'Create a new account',
+    'login.created': 'Account created. Check your email to confirm it.',
+    'login.accountExists': 'An account with this email already exists. Sign in with your password, or ask for a sign-in link.',
+    'login.passwordTooShort': 'The password needs at least 8 characters.',
+    'login.passwordRequired': 'Enter your password.',
+    'login.creating': 'Creating account...',
+    'login.orSeparator': 'or',
+    'login.existingNoPassword': 'Already have an account but no password? Ask for a sign-in link, then set one from the "Password" button once you are in.',
+
+    'party.you': 'You',
+    'party.owner': 'Owner',
+    'party.tenant': 'Tenant',
 
     'account.button': 'Password',
     'account.title': 'Set a password',
@@ -345,8 +369,6 @@ const TRANSLATIONS = {
     'maint.empty': 'No reports yet.',
     'maint.commentPlaceholder': 'Comment…',
     'maint.reply': 'Reply',
-    'maint.you': 'You',
-    'maint.other': 'Them',
 
     'msg.ownerTitle': 'Messages with the tenant',
     'msg.tenantTitle': 'Messages with the owner',

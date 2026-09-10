@@ -138,8 +138,10 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .request-card .desc{font-size:.88rem; color:var(--text-soft); margin:8px 0;}
 .status-actions{display:flex; gap:6px; flex-wrap:wrap; margin:8px 0;}
 .comments{margin-top:10px; border-top:1px solid var(--line); padding-top:10px;}
-.comment{font-size:.85rem; margin-bottom:6px;}
+.comment{font-size:.85rem; margin-bottom:10px;}
 .comment .author{font-weight:600;}
+.comment-time{font-size:.72rem; color:var(--text-soft); margin-left:8px;}
+.comment-body{margin-top:2px;}
 .comment-form{display:flex; gap:8px; margin-top:8px;}
 .comment-form input{flex:1;}
 .comment-form button{white-space:nowrap;}
@@ -148,6 +150,7 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .message-bubble{padding:9px 13px; border-radius:12px; max-width:75%; font-size:.9rem;}
 .message-bubble.mine{background:var(--accent); color:#fff; align-self:flex-end;}
 .message-bubble.theirs{background:var(--bg-alt); align-self:flex-start;}
+.message-bubble .sender{font-size:.72rem; font-weight:700; opacity:.85; margin-bottom:2px;}
 .message-bubble .meta{font-size:.7rem; opacity:.7; margin-top:3px;}
 .message-form{display:flex; gap:8px;}
 .message-form input{flex:1;}
@@ -167,3 +170,11 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 /* Sits between the sign-in form and the magic-link fallback button. */
 .small-note{margin:18px 0 8px; font-size:.85rem;}
 .center-card + .center-card{margin-top:18px;}
+
+.btn-secondary{
+  margin-top:10px; width:100%; background:var(--bg-alt); color:var(--accent-dark);
+  border:1px solid var(--accent); padding:11px 20px; border-radius:10px;
+  font-weight:600; font-size:.92rem; cursor:pointer; font-family:inherit;
+}
+.btn-secondary:hover{background:var(--line);}
+.soft-rule{border:none; border-top:1px solid var(--line); margin:22px 0 0;}
