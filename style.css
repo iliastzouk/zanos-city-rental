@@ -188,4 +188,3 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
   font-size:.72rem; background:var(--bg-alt); padding:8px; border-radius:8px;
   margin:6px 0 0; overflow-x:auto; max-height:220px;
 }
-.center-link{display:block; margin:16px auto 0;}

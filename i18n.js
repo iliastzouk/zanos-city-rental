@@ -143,7 +143,6 @@ const TRANSLATIONS = {
     'act.UPDATE': 'Αλλαγή',
     'act.DELETE': 'Διαγραφή',
     'act.ERROR': 'Σφάλμα',
-    'login.imGuest': 'Είμαι επισκέπτης',
 
     'tab.info': 'Πληροφορίες',
     'info.formTitle': 'Νέα πληροφορία',
@@ -406,7 +405,6 @@ const TRANSLATIONS = {
     'act.UPDATE': 'Changed',
     'act.DELETE': 'Deleted',
     'act.ERROR': 'Error',
-    'login.imGuest': 'I am a guest',
 
     'tab.info': 'Information',
     'info.formTitle': 'New entry',
