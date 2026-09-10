@@ -15,6 +15,7 @@ let currentUser = null;
 let currentMembership = null; // { property_id, role, ... }
 let currentProperty = null;
 let currentTenancy = null; // active tenancy (owner: latest active; tenant: their own)
+let editingTenancyId = null;
 
 // ---------- View management ----------
 function showView(id) {
@@ -68,6 +69,38 @@ function initTabs(scopeSelector) {
 
 // ---------- Auth ----------
 const GUEST_CODE_KEY = 'zanos_guest_code';
+const DEVICE_ROLE_KEY = 'zanos_device_role';
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+let loggingError = false;
+
+// Failures never reach a database trigger, so they are reported explicitly.
+// Guarded against recursion: a failure to log must not log a failure.
+async function logError(context, error, details) {
+  if (loggingError || !currentUser) return;
+  loggingError = true;
+  try {
+    await sb.rpc('rental_log_client_error', {
+      p_context: context,
+      p_message: (error && (error.message || String(error))) || 'unknown',
+      p_details: details || null
+    });
+  } catch (e) {
+    /* nothing useful left to do */
+  } finally {
+    loggingError = false;
+  }
+}
+
+window.addEventListener('error', (e) => logError('window.onerror', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => logError('unhandledrejection', e.reason));
+
+// Every failed Supabase call goes through here so it lands in the audit log too.
+function reportFailure(context, error, el, friendly) {
+  logError(context, error);
+  const text = friendly || t('error', { msg: error.message });
+  if (el) setMsg(el, text, 'error'); else alert(text);
+}
 
 async function sendMagicLink(email) {
   return sb.auth.signInWithOtp({
@@ -104,6 +137,36 @@ document.getElementById('magicLinkBtn').addEventListener('click', async () => {
   const { error } = await sendMagicLink(email);
   if (error) setMsg(msg, authErrorText(error), 'error');
   else setMsg(msg, t('login.sent'), 'ok');
+});
+
+function rememberDeviceRole(role) {
+  try { localStorage.setItem(DEVICE_ROLE_KEY, role); } catch (e) { /* private mode */ }
+}
+
+// A phone that has signed in as owner or tenant should not be offered the guest
+// entry, and vice versa. Both stay reachable behind a link, since a device can
+// legitimately change hands.
+function applyDeviceRoleToLogin() {
+  let role = null;
+  try { role = localStorage.getItem(DEVICE_ROLE_KEY); } catch (e) { /* private mode */ }
+
+  const guestHidden = role === 'account';
+  const accountHidden = role === 'guest';
+
+  document.getElementById('guestCard').hidden = guestHidden;
+  document.getElementById('revealGuest').hidden = !guestHidden;
+  document.getElementById('signinCard').hidden = accountHidden;
+  document.getElementById('signupCard').hidden = true;
+  document.getElementById('revealAccount').hidden = !accountHidden;
+}
+
+document.getElementById('revealGuest').addEventListener('click', () => {
+  document.getElementById('guestCard').hidden = false;
+  document.getElementById('revealGuest').hidden = true;
+});
+document.getElementById('revealAccount').addEventListener('click', () => {
+  document.getElementById('signinCard').hidden = false;
+  document.getElementById('revealAccount').hidden = true;
 });
 
 function showSignupCard(show) {
@@ -207,7 +270,8 @@ document.getElementById('guestCodeForm').addEventListener('submit', async (e) =>
   const msg = document.getElementById('guestMsg');
   setMsg(msg, t('onb.guest.redeeming'), '');
   if (await showGuestView(code)) {
-    localStorage.setItem(GUEST_CODE_KEY, code);
+    try { localStorage.setItem(GUEST_CODE_KEY, code); } catch (e) { /* private mode */ }
+    rememberDeviceRole('guest');
     setMsg(msg, '', '');
   } else {
     setMsg(msg, t('onb.guest.invalid'), 'error');
@@ -235,6 +299,10 @@ async function loadOwnerDashboard() {
   await refreshOwnerMessages();
   await refreshPropertyInfo();
   await refreshGuestInvites();
+  await refreshAllowedTenants();
+  await refreshPeople();
+  await refreshDocuments('owner');
+  await refreshAudit();
 }
 
 async function refreshTenancies() {
@@ -254,8 +322,10 @@ async function refreshTenancies() {
           <div class="sub">${fmtDate(active.start_date)} → ${active.end_date ? fmtDate(active.end_date) : t('dash')} ·
             ${t('tenancy.rentLine', { amount: fmtMoney(active.monthly_rent) })}</div>
         </div>
+        <button class="btn-small" data-edit-tenancy="${active.id}">${t('tenancy.edit')}</button>
         <button class="btn-small danger" data-end-tenancy="${active.id}">${t('tenancy.endBtn')}</button>
       </div>`;
+    infoEl.querySelector('[data-edit-tenancy]').addEventListener('click', () => startTenancyEdit(active));
     infoEl.querySelector('[data-end-tenancy]').addEventListener('click', async (e) => {
       if (!confirm(t('tenancy.endConfirm'))) return;
       await sb.from('rental_tenancies').update({ status: 'ended' }).eq('id', e.target.getAttribute('data-end-tenancy'));
@@ -280,6 +350,29 @@ async function refreshTenancies() {
   }
 }
 
+function startTenancyEdit(tenancy) {
+  editingTenancyId = tenancy.id;
+  document.getElementById('tenantName').value = tenancy.tenant_name || '';
+  document.getElementById('tenantEmail').value = tenancy.tenant_email || '';
+  document.getElementById('leaseStart').value = tenancy.start_date || '';
+  document.getElementById('leaseEnd').value = tenancy.end_date || '';
+  document.getElementById('rentAmount').value = tenancy.monthly_rent ?? '';
+  document.getElementById('commonYearly').value = tenancy.common_expenses_yearly ?? '';
+  document.getElementById('internetMonthly').value = tenancy.internet_monthly ?? '';
+  document.getElementById('tenancyEditNote').hidden = false;
+  document.querySelector('#tenancyForm button[type=submit]').textContent = t('tenancy.update');
+  document.getElementById('tenancyForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelTenancyEdit() {
+  editingTenancyId = null;
+  document.getElementById('tenancyForm').reset();
+  document.getElementById('tenancyEditNote').hidden = true;
+  document.querySelector('#tenancyForm button[type=submit]').textContent = t('tenancy.save');
+}
+
+document.getElementById('cancelTenancyEdit').addEventListener('click', cancelTenancyEdit);
+
 document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const payload = {
@@ -290,14 +383,91 @@ document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
     end_date: document.getElementById('leaseEnd').value || null,
     monthly_rent: parseFloat(document.getElementById('rentAmount').value),
     common_expenses_yearly: parseFloat(document.getElementById('commonYearly').value) || null,
-    internet_monthly: parseFloat(document.getElementById('internetMonthly').value) || null,
-    created_by: currentUser.id
+    internet_monthly: parseFloat(document.getElementById('internetMonthly').value) || null
   };
-  const { error } = await sb.from('rental_tenancies').insert(payload);
-  if (error) { alert(t('error', { msg: error.message })); return; }
-  e.target.reset();
+
+  const { error } = editingTenancyId
+    ? await sb.from('rental_tenancies').update(payload).eq('id', editingTenancyId)
+    : await sb.from('rental_tenancies').insert({ ...payload, created_by: currentUser.id });
+
+  if (error) { reportFailure('tenancy.save', error); return; }
+  cancelTenancyEdit();
   await refreshTenancies();
 });
+
+// ---------- Approved tenants and who has access ----------
+
+async function refreshAllowedTenants() {
+  const el = document.getElementById('allowedTenantList');
+  const { data: rows, error } = await sb.from('rental_allowed_tenants')
+    .select('*').eq('property_id', currentProperty.id).order('created_at');
+  if (error) { reportFailure('allowedTenants.load', error); return; }
+
+  el.innerHTML = (!rows || rows.length === 0)
+    ? `<span class="muted">${t('allowed.empty')}</span>`
+    : rows.map(r => `
+      <div class="list-item">
+        <div class="main">
+          <div class="title">${escapeHtml(r.email)}</div>
+          ${r.label ? `<div class="sub">${escapeHtml(r.label)}</div>` : ''}
+        </div>
+        <button class="btn-small danger" data-remove-allowed="${r.id}">${t('allowed.remove')}</button>
+      </div>`).join('');
+
+  el.querySelectorAll('[data-remove-allowed]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('allowed.removeConfirm'))) return;
+      const { error: delErr } = await sb.from('rental_allowed_tenants')
+        .delete().eq('id', btn.getAttribute('data-remove-allowed'));
+      if (delErr) { reportFailure('allowedTenants.remove', delErr); return; }
+      await refreshAllowedTenants();
+    });
+  });
+}
+
+document.getElementById('allowedTenantForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { error } = await sb.from('rental_allowed_tenants').insert({
+    property_id: currentProperty.id,
+    email: document.getElementById('allowedEmail').value.trim(),
+    label: document.getElementById('allowedLabel').value.trim() || null,
+    created_by: currentUser.id
+  });
+  if (error) { reportFailure('allowedTenants.add', error); return; }
+  e.target.reset();
+  await refreshAllowedTenants();
+});
+
+async function refreshPeople() {
+  const el = document.getElementById('peopleList');
+  const { data: people, error } = await sb.rpc('rental_property_people');
+  if (error) { reportFailure('people.load', error); return; }
+
+  el.innerHTML = (!people || people.length === 0)
+    ? `<span class="muted">${t('people.empty')}</span>`
+    : people.map(p => `
+      <div class="list-item">
+        <div class="main">
+          <div class="title">${escapeHtml(p.email)}</div>
+          <div class="sub">${fmtDate(p.joined_at)}</div>
+        </div>
+        <span class="pill ${p.role === 'owner' ? 'paid' : 'pending'}">${
+          p.role === 'owner' ? t('party.owner') : t('party.tenant')}</span>
+        ${p.role === 'owner' ? '' :
+          `<button class="btn-small danger" data-remove-person="${p.user_id}">${t('people.remove')}</button>`}
+      </div>`).join('');
+
+  el.querySelectorAll('[data-remove-person]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('people.removeConfirm'))) return;
+      const { error: delErr } = await sb.from('rental_property_members').delete()
+        .eq('property_id', currentProperty.id)
+        .eq('user_id', btn.getAttribute('data-remove-person'));
+      if (delErr) { reportFailure('people.remove', delErr); return; }
+      await refreshPeople();
+    });
+  });
+}
 
 async function refreshOwnerPayments() {
   const listEl = document.getElementById('ownerPaymentsList');
@@ -319,6 +489,7 @@ async function refreshOwnerPayments() {
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
         <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
       </div>
+      ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
       <span class="pill ${p.status}">${statusLabel(p.status)}</span>
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
     </div>`).join('');
@@ -335,16 +506,33 @@ async function refreshOwnerPayments() {
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!currentTenancy) { alert(t('need.tenancyFirst')); return; }
-  const payload = {
-    tenancy_id: currentTenancy.id,
-    category: document.getElementById('paymentCategory').value,
-    amount: parseFloat(document.getElementById('paymentAmount').value),
-    due_date: document.getElementById('paymentDue').value || null,
-    notes: document.getElementById('paymentNotes').value.trim() || null,
-    created_by: currentUser.id
-  };
-  const { error } = await sb.from('rental_payments').insert(payload);
-  if (error) { alert(t('error', { msg: error.message })); return; }
+
+  const category = document.getElementById('paymentCategory').value;
+  const amount = parseFloat(document.getElementById('paymentAmount').value);
+  const due = document.getElementById('paymentDue').value || null;
+  const notes = document.getElementById('paymentNotes').value.trim() || null;
+  const recurring = document.getElementById('paymentRecurring').checked;
+
+  if (recurring) {
+    // Without a first date there is nothing to step monthly from.
+    if (!due) { alert(t('pay.needDueDate')); return; }
+    const { data: created, error } = await sb.rpc('rental_create_recurring_payments', {
+      p_tenancy_id: currentTenancy.id,
+      p_category: category,
+      p_amount: amount,
+      p_first_due: due,
+      p_notes: notes
+    });
+    if (error) { reportFailure('payments.recurring', error); return; }
+    alert(t('pay.recurringDone', { count: created }));
+  } else {
+    const { error } = await sb.from('rental_payments').insert({
+      tenancy_id: currentTenancy.id, category, amount, due_date: due, notes,
+      created_by: currentUser.id
+    });
+    if (error) { reportFailure('payments.add', error); return; }
+  }
+
   e.target.reset();
   await refreshOwnerPayments();
 });
@@ -482,6 +670,136 @@ document.getElementById('guestInviteForm').addEventListener('submit', async (e) 
 });
 
 // ============================================================
+// Documents (owner and tenant share this)
+// ============================================================
+
+function docCategoryLabel(v) { return t('doccat.' + v); }
+
+async function refreshDocuments(prefix) {
+  const el = document.getElementById(prefix + 'DocList');
+  if (!currentTenancy) {
+    el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
+    return;
+  }
+  const { data: docs, error } = await sb.from('rental_documents')
+    .select('*').eq('tenancy_id', currentTenancy.id)
+    .order('created_at', { ascending: false });
+  if (error) { reportFailure('documents.load', error); return; }
+
+  el.innerHTML = (!docs || docs.length === 0)
+    ? `<span class="muted">${t('doc.empty')}</span>`
+    : docs.map(d => `
+      <div class="list-item">
+        <div class="main">
+          <div class="title">${escapeHtml(d.title)}</div>
+          <div class="sub">${docCategoryLabel(d.category)} · ${fmtDate(d.created_at)}</div>
+        </div>
+        <button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>
+        <button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>
+      </div>`).join('');
+
+  el.querySelectorAll('[data-open-doc]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      // The bucket is private, so every view needs a short-lived signed URL.
+      const { data, error: urlErr } = await sb.storage.from('rental-documents')
+        .createSignedUrl(btn.getAttribute('data-path'), 60);
+      if (urlErr) { reportFailure('documents.sign', urlErr); return; }
+      window.open(data.signedUrl, '_blank');
+    });
+  });
+
+  el.querySelectorAll('[data-del-doc]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('doc.deleteConfirm'))) return;
+      const { error: rmErr } = await sb.storage.from('rental-documents')
+        .remove([btn.getAttribute('data-path')]);
+      if (rmErr) { reportFailure('documents.removeFile', rmErr); return; }
+      const { error: delErr } = await sb.from('rental_documents')
+        .delete().eq('id', btn.getAttribute('data-del-doc'));
+      if (delErr) { reportFailure('documents.removeRow', delErr); return; }
+      await refreshDocuments(prefix);
+    });
+  });
+}
+
+function wireDocumentUpload(prefix) {
+  document.getElementById(prefix + 'DocForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById(prefix + 'DocMsg');
+    if (!currentTenancy) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
+
+    const file = document.getElementById(prefix + 'DocFile').files[0];
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
+
+    setMsg(msg, t('doc.uploading'), '');
+    // The first path segment is the tenancy: that is what the storage policies
+    // read to decide who may open the file.
+    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+    const path = `${currentTenancy.id}/${crypto.randomUUID()}${ext}`;
+
+    const { error: upErr } = await sb.storage.from('rental-documents').upload(path, file);
+    if (upErr) { reportFailure('documents.upload', upErr, msg); return; }
+
+    const { error: rowErr } = await sb.from('rental_documents').insert({
+      tenancy_id: currentTenancy.id,
+      title: document.getElementById(prefix + 'DocTitle').value.trim(),
+      category: document.getElementById(prefix + 'DocCategory').value,
+      storage_path: path,
+      file_size: file.size,
+      mime_type: file.type || null,
+      uploaded_by: currentUser.id
+    });
+    if (rowErr) {
+      // Do not leave an orphan file behind if the row fails.
+      await sb.storage.from('rental-documents').remove([path]);
+      reportFailure('documents.insertRow', rowErr, msg);
+      return;
+    }
+    e.target.reset();
+    setMsg(msg, '', '');
+    await refreshDocuments(prefix);
+  });
+}
+
+wireDocumentUpload('owner');
+wireDocumentUpload('tenant');
+
+// ============================================================
+// Audit log (owner only)
+// ============================================================
+
+async function refreshAudit() {
+  const el = document.getElementById('auditList');
+  let query = sb.from('rental_audit_log')
+    .select('*').eq('property_id', currentProperty.id)
+    .order('occurred_at', { ascending: false }).limit(200);
+  if (document.getElementById('auditFilter').value === 'errors') {
+    query = query.eq('action', 'ERROR');
+  }
+  const { data: rows, error } = await query;
+  if (error) { reportFailure('audit.load', error); return; }
+
+  el.innerHTML = (!rows || rows.length === 0)
+    ? `<span class="muted">${t('audit.empty')}</span>`
+    : rows.map(r => `
+      <div class="list-item audit-row">
+        <div class="main">
+          <div class="title">${t('act.' + r.action)} · ${escapeHtml(r.table_name)}</div>
+          <div class="sub">${fmtDateTime(r.occurred_at)} · ${escapeHtml(r.actor_email || '—')}</div>
+          <details class="audit-details">
+            <summary>${t('audit.details')}</summary>
+            <pre>${escapeHtml(JSON.stringify(r.new_data ?? r.old_data ?? {}, null, 1))}</pre>
+          </details>
+        </div>
+        <span class="pill ${r.action === 'ERROR' ? 'overdue' : 'low'}">${t('act.' + r.action)}</span>
+      </div>`).join('');
+}
+
+document.getElementById('auditRefresh').addEventListener('click', refreshAudit);
+document.getElementById('auditFilter').addEventListener('change', refreshAudit);
+
+// ============================================================
 // GUEST DASHBOARD
 // ============================================================
 
@@ -557,6 +875,7 @@ async function loadTenantDashboard() {
   await refreshTenantMaintenance();
   await refreshTenantMessages();
   await renderInfoList('tenantInfoList');
+  await refreshDocuments('tenant');
 }
 
 async function refreshTenantPayments() {
@@ -741,14 +1060,17 @@ async function boot() {
     document.getElementById('userBox').hidden = true;
     document.getElementById('passwordPanel').hidden = true;
     // A guest is identified by their code alone, with no account at all.
-    const savedCode = localStorage.getItem(GUEST_CODE_KEY);
+    let savedCode = null;
+    try { savedCode = localStorage.getItem(GUEST_CODE_KEY); } catch (e) { /* private mode */ }
     if (savedCode && await showGuestView(savedCode)) return;
-    localStorage.removeItem(GUEST_CODE_KEY);
+    try { localStorage.removeItem(GUEST_CODE_KEY); } catch (e) { /* private mode */ }
+    applyDeviceRoleToLogin();
     showView('view-login');
     return;
   }
 
   currentUser = session.user;
+  rememberDeviceRole('account');
   document.getElementById('userBox').hidden = false;
   document.getElementById('userEmail').textContent = currentUser.email;
 
@@ -758,8 +1080,12 @@ async function boot() {
   const summary = summaryRows && summaryRows[0];
 
   if (!summary) {
-    const { data: canCreate } = await sb.rpc('rental_can_create_property');
+    const [{ data: canCreate }, { data: canJoin }] = await Promise.all([
+      sb.rpc('rental_can_create_property'),
+      sb.rpc('rental_can_join_as_tenant')
+    ]);
     document.getElementById('ownerOnboardCard').hidden = !canCreate;
+    document.getElementById('tenantOnboardCard').hidden = !canJoin;
     showView('view-onboarding');
     return;
   }

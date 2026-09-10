@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260910d">
+<link rel="stylesheet" href="style.css?v=20260911a">
 </head>
 <body>
 
@@ -77,7 +77,7 @@
       <button id="backToSignIn" class="btn-link" type="button" data-i18n="signup.back">← Πίσω στη σύνδεση</button>
     </div>
 
-    <div class="card center-card">
+    <div class="card center-card" id="guestCard">
       <h2 data-i18n="login.guestTitle">Είσοδος επισκέπτη</h2>
       <p class="muted" data-i18n="login.guestHint">Έχεις κωδικό επισκέπτη; Δεν χρειάζεται λογαριασμός — βάλ' τον εδώ.</p>
       <form id="guestCodeForm">
@@ -86,6 +86,8 @@
       </form>
       <p id="guestMsg" class="msg" hidden></p>
     </div>
+    <button id="revealGuest" class="btn-link center-link" type="button" hidden data-i18n="login.imGuest">Είμαι επισκέπτης</button>
+    <button id="revealAccount" class="btn-link center-link" type="button" hidden data-i18n="login.haveAccount">Έχω λογαριασμό</button>
   </section>
 
   <!-- LOADING VIEW -->
@@ -107,7 +109,7 @@
           <button type="submit" class="btn-primary" data-i18n="onb.owner.submit">Δημιουργία ακινήτου</button>
         </form>
       </div>
-      <div class="card">
+      <div class="card" id="tenantOnboardCard" hidden>
         <h2 data-i18n="onb.tenant.title">Είμαι ο ενοικιαστής</h2>
         <p class="muted" data-i18n="onb.tenant.hint">Έχεις κωδικό πρόσκλησης από τον ιδιοκτήτη; Βάλ' τον εδώ.</p>
         <form id="joinPropertyForm">
@@ -138,7 +140,9 @@
       <button class="tab-btn" data-tab="payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="documents" data-i18n="tab.documents">Έγγραφα</button>
       <button class="tab-btn" data-tab="info" data-i18n="tab.info">Πληροφορίες</button>
+      <button class="tab-btn" data-tab="audit" data-i18n="tab.audit">Ιστορικό</button>
     </nav>
 
     <div class="tab-panel" data-panel="tenancy">
@@ -148,6 +152,10 @@
       </div>
       <div class="card">
         <h2 data-i18n="tenancy.formTitle">Νέα / Επεξεργασία μίσθωσης</h2>
+        <p id="tenancyEditNote" class="muted" hidden>
+          <span data-i18n="tenancy.editing">Επεξεργασία τρέχουσας μίσθωσης</span> ·
+          <button type="button" id="cancelTenancyEdit" class="btn-link" data-i18n="tenancy.cancelEdit">Ακύρωση</button>
+        </p>
         <form id="tenancyForm">
           <label data-i18n="tenancy.tenantName">Όνομα ενοικιαστή</label>
           <input type="text" id="tenantName" data-i18n-placeholder="tenancy.tenantNamePlaceholder" placeholder="π.χ. Γιάννης Παπαδόπουλος">
@@ -184,6 +192,28 @@
         <h2 data-i18n="tenancy.historyTitle">Ιστορικό μισθώσεων</h2>
         <div id="tenancyHistory" class="list"></div>
       </div>
+      <div class="card">
+        <h2 data-i18n="allowed.title">Εγκεκριμένοι ενοικιαστές</h2>
+        <p class="muted" data-i18n="allowed.hint">Μόνο αυτά τα email μπορούν να μπουν ως ενοικιαστές.</p>
+        <form id="allowedTenantForm">
+          <div class="form-row">
+            <div>
+              <label data-i18n="allowed.email">Email ενοικιαστή</label>
+              <input type="email" id="allowedEmail" placeholder="tenant@email.com" required>
+            </div>
+            <div>
+              <label data-i18n="allowed.label">Σημείωση (προαιρετικό)</label>
+              <input type="text" id="allowedLabel" data-i18n-placeholder="allowed.labelPlaceholder" placeholder="π.χ. Μαρία">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" data-i18n="allowed.add">Προσθήκη</button>
+        </form>
+        <div id="allowedTenantList" class="list"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="people.title">Ποιοι έχουν πρόσβαση</h2>
+        <div id="peopleList" class="list"></div>
+      </div>
     </div>
 
     <div class="tab-panel" data-panel="payments" hidden>
@@ -212,6 +242,10 @@
           </div>
           <label data-i18n="pay.notes">Σημειώσεις</label>
           <input type="text" id="paymentNotes" data-i18n-placeholder="pay.notesPlaceholder" placeholder="π.χ. Ενοίκιο Νοεμβρίου">
+          <label class="check-row">
+            <input type="checkbox" id="paymentRecurring">
+            <span data-i18n="pay.recurring">Επαναλαμβανόμενο κάθε μήνα μέχρι τη λήξη της μίσθωσης</span>
+          </label>
           <button type="submit" class="btn-primary" data-i18n="pay.submit">Καταχώρηση</button>
         </form>
       </div>
@@ -239,6 +273,34 @@
       </div>
     </div>
 
+    <div class="tab-panel" data-panel="documents" hidden>
+      <div class="card">
+        <h2 data-i18n="doc.formTitle">Ανέβασμα εγγράφου</h2>
+        <form id="ownerDocForm">
+          <label data-i18n="doc.title">Τίτλος</label>
+          <input type="text" id="ownerDocTitle" data-i18n-placeholder="doc.titlePlaceholder" placeholder="π.χ. Λογαριασμός ΑΗΚ" required>
+          <label data-i18n="doc.category">Κατηγορία</label>
+          <select id="ownerDocCategory">
+                <option value="electricity" data-i18n="doccat.electricity">Ρεύμα</option>
+                <option value="water" data-i18n="doccat.water">Νερό</option>
+                <option value="internet" data-i18n="doccat.internet">Internet</option>
+                <option value="common_expenses" data-i18n="doccat.common_expenses">Κοινόχρηστα</option>
+                <option value="contract" data-i18n="doccat.contract">Συμβόλαιο</option>
+                <option value="receipt" data-i18n="doccat.receipt">Απόδειξη</option>
+                <option value="other" selected data-i18n="doccat.other">Άλλο</option>
+          </select>
+          <label data-i18n="doc.file">Αρχείο</label>
+          <input type="file" id="ownerDocFile" required>
+          <button type="submit" class="btn-primary" data-i18n="doc.upload">Ανέβασμα</button>
+        </form>
+        <p id="ownerDocMsg" class="msg" hidden></p>
+      </div>
+      <div class="card">
+        <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <div id="ownerDocList" class="list"></div>
+      </div>
+    </div>
+
     <div class="tab-panel" data-panel="info" hidden>
       <div class="card">
         <h2 data-i18n="info.formTitle">Νέα πληροφορία</h2>
@@ -258,7 +320,8 @@
         <h2 data-i18n="info.listTitle">Πληροφορίες χώρου</h2>
         <div id="ownerInfoList" class="list"></div>
       </div>
-      <div class="card">
+
+          <div class="card">
         <h2 data-i18n="gcode.title">Κωδικοί επισκεπτών</h2>
         <form id="guestInviteForm">
           <div class="form-row">
@@ -276,6 +339,25 @@
         <div id="guestInviteList" class="list"></div>
       </div>
     </div>
+
+    <div class="tab-panel" data-panel="audit" hidden>
+      <div class="card">
+        <h2 data-i18n="audit.title">Ιστορικό ενεργειών</h2>
+        <p class="muted" data-i18n="audit.hint">Κάθε αλλαγή και κάθε σφάλμα, με ποιον και πότε.</p>
+        <div class="form-row">
+          <div>
+            <select id="auditFilter">
+              <option value="all" data-i18n="audit.filterAll">Όλα</option>
+              <option value="errors" data-i18n="audit.filterErrors">Μόνο σφάλματα</option>
+            </select>
+          </div>
+          <div>
+            <button type="button" id="auditRefresh" class="btn-small" data-i18n="audit.refresh">Ανανέωση</button>
+          </div>
+        </div>
+        <div id="auditList" class="list"></div>
+      </div>
+    </div>
   </section>
 
   <!-- TENANT DASHBOARD -->
@@ -291,6 +373,7 @@
       <button class="tab-btn active" data-tab="t-payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="t-maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="t-messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="t-documents" data-i18n="tab.documents">Έγγραφα</button>
       <button class="tab-btn" data-tab="t-info" data-i18n="tab.info">Πληροφορίες</button>
     </nav>
 
@@ -336,6 +419,35 @@
       </div>
     </div>
 
+
+    <div class="tab-panel" data-panel="t-documents" hidden>
+      <div class="card">
+        <h2 data-i18n="doc.formTitle">Ανέβασμα εγγράφου</h2>
+        <form id="tenantDocForm">
+          <label data-i18n="doc.title">Τίτλος</label>
+          <input type="text" id="tenantDocTitle" data-i18n-placeholder="doc.titlePlaceholder" placeholder="π.χ. Λογαριασμός ΑΗΚ" required>
+          <label data-i18n="doc.category">Κατηγορία</label>
+          <select id="tenantDocCategory">
+                <option value="electricity" data-i18n="doccat.electricity">Ρεύμα</option>
+                <option value="water" data-i18n="doccat.water">Νερό</option>
+                <option value="internet" data-i18n="doccat.internet">Internet</option>
+                <option value="common_expenses" data-i18n="doccat.common_expenses">Κοινόχρηστα</option>
+                <option value="contract" data-i18n="doccat.contract">Συμβόλαιο</option>
+                <option value="receipt" data-i18n="doccat.receipt">Απόδειξη</option>
+                <option value="other" selected data-i18n="doccat.other">Άλλο</option>
+          </select>
+          <label data-i18n="doc.file">Αρχείο</label>
+          <input type="file" id="tenantDocFile" required>
+          <button type="submit" class="btn-primary" data-i18n="doc.upload">Ανέβασμα</button>
+        </form>
+        <p id="tenantDocMsg" class="msg" hidden></p>
+      </div>
+      <div class="card">
+        <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <div id="tenantDocList" class="list"></div>
+      </div>
+    </div>
+
     <div class="tab-panel" data-panel="t-info" hidden>
       <div class="card">
         <h2 data-i18n="info.listTitle">Πληροφορίες χώρου</h2>
@@ -361,7 +473,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260910d"></script>
-<script src="app.js?v=20260910d"></script>
+<script src="i18n.js?v=20260911a"></script>
+<script src="app.js?v=20260911a"></script>
 </body>
 </html>
