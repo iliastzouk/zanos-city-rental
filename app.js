@@ -313,8 +313,68 @@ async function refreshTenancies() {
           <div class="sub">${fmtDate(item.start_date)} → ${item.end_date ? fmtDate(item.end_date) : t('dash')} · ${t('tenancy.rentLine', { amount: fmtMoney(item.monthly_rent) })}</div>
         </div>
         <span class="pill ${item.status === 'active' ? 'paid' : 'pending'}">${item.status === 'active' ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
+        <button class="btn-small" data-edit-row="${item.id}">${t('tenancy.edit')}</button>
+        <button class="btn-small danger" data-delete-row="${item.id}">${t('tenancy.delete')}</button>
       </div>`).join('');
+
+    // Any tenancy can be edited or removed, not only the active one.
+    histEl.querySelectorAll('[data-edit-row]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        startTenancyEdit(tenancies.find(x => x.id === btn.getAttribute('data-edit-row')));
+      });
+    });
+    histEl.querySelectorAll('[data-delete-row]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        deleteTenancy(tenancies.find(x => x.id === btn.getAttribute('data-delete-row')));
+      });
+    });
   }
+}
+
+// Everything hanging off a tenancy is ON DELETE CASCADE, so removing one takes
+// its payments, messages, reports and documents with it. Say so with real
+// numbers before touching anything.
+async function deleteTenancy(tenancy) {
+  if (!tenancy) return;
+  const msg = document.getElementById('tenancyListMsg');
+
+  const [payments, messages, requests, documents] = await Promise.all([
+    sb.from('rental_payments').select('id, proof_path').eq('tenancy_id', tenancy.id),
+    sb.from('rental_messages').select('id').eq('tenancy_id', tenancy.id),
+    sb.from('rental_maintenance_requests').select('id').eq('tenancy_id', tenancy.id),
+    sb.from('rental_documents').select('id, storage_path').eq('tenancy_id', tenancy.id)
+  ]);
+  const failed = [payments, messages, requests, documents].find(r => r.error);
+  if (failed) { reportFailure('tenancy.deleteCount', failed.error, msg); return; }
+
+  const what = `${tenancy.tenant_name || t('tenancy.defaultTenant')} · ` +
+    `${fmtDate(tenancy.start_date)} → ${tenancy.end_date ? fmtDate(tenancy.end_date) : t('dash')}`;
+
+  if (!confirm(t('tenancy.deleteConfirm', {
+    what,
+    payments: payments.data.length,
+    messages: messages.data.length,
+    requests: requests.data.length,
+    documents: documents.data.length
+  }))) return;
+
+  setMsg(msg, t('tenancy.deleting'), '');
+
+  // The cascade clears the rows but not the stored files, which would otherwise
+  // linger in the bucket unreachable and unaccounted for.
+  const paths = [
+    ...documents.data.map(d => d.storage_path),
+    ...payments.data.map(p => p.proof_path)
+  ].filter(Boolean);
+  if (paths.length) await sb.storage.from('rental-documents').remove(paths);
+
+  const { error } = await sb.from('rental_tenancies').delete().eq('id', tenancy.id);
+  if (error) { reportFailure('tenancy.delete', error, msg); return; }
+
+  if (currentTenancy && currentTenancy.id === tenancy.id) currentTenancy = null;
+  if (editingTenancyId === tenancy.id) cancelTenancyEdit();
+  setMsg(msg, '', '');
+  await loadOwnerDashboard();
 }
 
 function startTenancyEdit(tenancy) {
