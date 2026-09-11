@@ -774,6 +774,18 @@ function effectiveStatus(p) {
   return isOverdue(p) ? 'overdue' : p.status;
 }
 
+// Late, wanted within the month, or merely scheduled. A charge with no date is
+// owed rather than planned, so it counts as due soon.
+const DUE_SOON_DAYS = 30;
+function payBucket(p) {
+  if (isOverdue(p)) return 'overdue';
+  if (!p.due_date) return 'soon';
+  const limit = new Date();
+  limit.setHours(0, 0, 0, 0);
+  limit.setDate(limit.getDate() + DUE_SOON_DAYS);
+  return parseDate(p.due_date) <= limit ? 'soon' : 'scheduled';
+}
+
 function paymentSummary(payment) {
   const parts = [`${categoryLabel(payment.category)} — ${fmtMoney(payment.amount)}`];
   if (payment.due_date) parts.push(`${t('pay.dueLabel')} ${fmtDate(payment.due_date)}`);
@@ -1510,11 +1522,17 @@ async function refreshTenantPayments() {
     return;
   }
 
-  // What is actually owed, before any filter narrows the list.
+  // What is actually owed, before any filter narrows the list. A recurring
+  // charge writes one row per month to the end of the lease, so a single total
+  // of "everything unpaid" would read €6,600 the day a year of rent is
+  // scheduled — money that is not wanted yet. Split it by when it is due.
   const unpaid = rows.filter(p => p.status !== 'paid');
-  const owed = unpaid.reduce((sum, p) => sum + Number(p.amount), 0);
-  const overdueRows = unpaid.filter(isOverdue);
-  const overdueOwed = overdueRows.reduce((sum, p) => sum + Number(p.amount), 0);
+  const buckets = { overdue: [], soon: [], scheduled: [] };
+  unpaid.forEach(p => buckets[payBucket(p)].push(p));
+  const total = (list) => list.reduce((sum, p) => sum + Number(p.amount), 0);
+  const bucketPill = (cls, key, list) => list.length
+    ? `<span class="pill ${cls}">${t(key, { amount: fmtMoney(total(list)), count: list.length })}</span>`
+    : '';
   const upcoming = unpaid
     .filter(p => p.due_date && !isOverdue(p))
     .map(p => p.due_date).sort()[0];
@@ -1522,8 +1540,9 @@ async function refreshTenantPayments() {
   sumEl.innerHTML = unpaid.length === 0
     ? `<span class="pill paid">${t('pay.allSettled')}</span>`
     : [
-        `<span class="pill pending">${t('pay.outstanding', { amount: fmtMoney(owed) })}</span>`,
-        overdueRows.length ? `<span class="pill overdue">${t('pay.overdueCount', { count: overdueRows.length, amount: fmtMoney(overdueOwed) })}</span>` : '',
+        bucketPill('overdue', 'pay.overdueCount', buckets.overdue),
+        bucketPill('pending', 'pay.dueSoon', buckets.soon),
+        bucketPill('scheduled', 'pay.scheduled', buckets.scheduled),
         upcoming ? `<span class="pill low">${t('pay.nextDue', { date: fmtDate(upcoming) })}</span>` : ''
       ].join('');
 
