@@ -615,7 +615,7 @@ async function refreshOwnerPayments() {
   const statusFilter = document.getElementById('paymentsStatusFilter').value;
   const categoryFilter = document.getElementById('paymentsCategoryFilter').value;
   const payments = rows.filter(p =>
-    (statusFilter === 'all' || p.status === statusFilter) &&
+    (statusFilter === 'all' || effectiveStatus(p) === statusFilter) &&
     (categoryFilter === 'all' || p.category === categoryFilter));
 
   if (payments.length === 0) {
@@ -630,7 +630,7 @@ async function refreshOwnerPayments() {
         <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
-      <span class="pill ${p.status}">${statusLabel(p.status)}</span>
+      <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
       <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
@@ -664,6 +664,19 @@ function nextMonth(dateStr) {
   const day = Math.min(d, new Date(ny, nm, 0).getDate());
   const pad = (n) => String(n).padStart(2, '0');
   return `${ny}-${pad(nm)}-${pad(day)}`;
+}
+
+// Nothing ever writes the 'overdue' status, so a charge months past its date
+// still read as merely "pending" and the overdue filter matched nothing. It is
+// derived from the date instead.
+function isOverdue(p) {
+  if (p.status !== 'pending' || !p.due_date) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parseDate(p.due_date) < today;
+}
+function effectiveStatus(p) {
+  return isOverdue(p) ? 'overdue' : p.status;
 }
 
 function paymentSummary(payment) {
@@ -1378,21 +1391,57 @@ async function loadTenantDashboard() {
 
 async function refreshTenantPayments() {
   const listEl = document.getElementById('tenantPaymentsList');
-  if (!currentTenancy) { listEl.innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`; return; }
-  const { data: payments } = await sb.from('rental_payments')
+  const sumEl = document.getElementById('tenantPaySummary');
+  if (!currentTenancy) {
+    sumEl.innerHTML = '';
+    listEl.innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`;
+    return;
+  }
+  const { data: rows, error } = await sb.from('rental_payments')
     .select('*').eq('tenancy_id', currentTenancy.id)
     .order('due_date', { ascending: false, nullsFirst: false });
-  if (!payments || payments.length === 0) {
+  if (error) { reportFailure('payments.load', error); return; }
+
+  if (!rows || rows.length === 0) {
+    sumEl.innerHTML = '';
     listEl.innerHTML = `<span class="muted">${t('pay.empty')}</span>`;
     return;
   }
+
+  // What is actually owed, before any filter narrows the list.
+  const unpaid = rows.filter(p => p.status !== 'paid');
+  const owed = unpaid.reduce((sum, p) => sum + Number(p.amount), 0);
+  const overdue = unpaid.filter(isOverdue).length;
+  const upcoming = unpaid
+    .filter(p => p.due_date && !isOverdue(p))
+    .map(p => p.due_date).sort()[0];
+
+  sumEl.innerHTML = unpaid.length === 0
+    ? `<span class="pill paid">${t('pay.allSettled')}</span>`
+    : [
+        `<span class="pill pending">${t('pay.outstanding', { amount: fmtMoney(owed) })}</span>`,
+        overdue ? `<span class="pill overdue">${t('pay.overdueCount', { count: overdue })}</span>` : '',
+        upcoming ? `<span class="pill low">${t('pay.nextDue', { date: fmtDate(upcoming) })}</span>` : ''
+      ].join('');
+
+  const statusFilter = document.getElementById('tenantStatusFilter').value;
+  const categoryFilter = document.getElementById('tenantCategoryFilter').value;
+  const payments = rows.filter(p =>
+    (statusFilter === 'all' || effectiveStatus(p) === statusFilter) &&
+    (categoryFilter === 'all' || p.category === categoryFilter));
+
+  if (payments.length === 0) {
+    listEl.innerHTML = `<span class="muted">${t('pay.noneForFilter')}</span>`;
+    return;
+  }
+
   listEl.innerHTML = payments.map(p => `
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
         <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
-      <span class="pill ${p.status}">${statusLabel(p.status)}</span>
+      <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
     </div>`).join('');
 
@@ -1400,6 +1449,10 @@ async function refreshTenantPayments() {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
   });
 }
+
+['tenantStatusFilter', 'tenantCategoryFilter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', refreshTenantPayments);
+});
 
 document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
   e.preventDefault();

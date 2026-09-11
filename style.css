@@ -234,3 +234,6 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 /* Creating an account is rare here, so it steps back from the primary action. */
 #forgotPassword{display:block; margin:14px auto 0;}
 .create-link{display:block; margin:12px auto 0; font-weight:600;}
+
+.pay-summary{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px;}
+.pay-summary .pill{font-size:.78rem;}
