@@ -233,9 +233,33 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 
 /* Thumbnails of whatever the tenant photographed. */
 .photo-strip{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.photo-thumb{padding:0; border:none; background:none; cursor:pointer; line-height:0;}
 .photo-strip img{
   width:84px; height:84px; object-fit:cover; border-radius:8px;
   border:1px solid var(--line); display:block;
+}
+.photo-thumb:focus-visible img{outline:2px solid var(--accent); outline-offset:2px;}
+
+/* Full-screen photo viewer: one report's photos read as one set. */
+.photo-viewer{
+  position:fixed; inset:0; z-index:100; background:rgba(20,17,14,.93);
+  display:flex; align-items:center; justify-content:center; padding:56px 16px;
+}
+.photo-viewer img{max-width:100%; max-height:100%; object-fit:contain; border-radius:6px;}
+.photo-viewer button{
+  position:absolute; background:rgba(255,255,255,.12); color:#fff; border:none;
+  cursor:pointer; font-family:inherit; line-height:1;
+}
+.photo-viewer button:hover{background:rgba(255,255,255,.22);}
+.pv-close{top:12px; right:12px; width:40px; height:40px; border-radius:50%; font-size:1.1rem;}
+/* Big enough for a thumb, and clear of the image itself. */
+.pv-nav{top:50%; transform:translateY(-50%); width:44px; height:64px; border-radius:10px; font-size:2rem;}
+.pv-nav.prev{left:8px;}
+.pv-nav.next{right:8px;}
+.pv-count{
+  position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+  color:#fff; font-size:.82rem; letter-spacing:.04em;
+  background:rgba(255,255,255,.12); padding:5px 14px; border-radius:999px;
 }
 
 /* ---- Calendar ---- */

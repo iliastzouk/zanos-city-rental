@@ -1940,11 +1940,84 @@ async function loadPhotos(card, requestId) {
 
   const { data: signed } = await sb.storage.from('rental-documents')
     .createSignedUrls(photos.map(p => p.storage_path), 300);
-  el.innerHTML = (signed || [])
-    .filter(item => item.signedUrl)
-    .map(item => `<a href="${item.signedUrl}" target="_blank" rel="noopener">
-        <img src="${item.signedUrl}" alt="" loading="lazy"></a>`).join('');
+  const urls = (signed || []).map(item => item.signedUrl).filter(Boolean);
+  if (urls.length === 0) { el.innerHTML = ''; return; }
+
+  // Each thumbnail opens the whole set, not just itself.
+  el.innerHTML = urls.map((url, i) => `<button type="button" class="photo-thumb" data-photo-index="${i}">
+      <img src="${url}" alt="" loading="lazy"></button>`).join('');
+  el.querySelectorAll('[data-photo-index]').forEach(btn => {
+    btn.addEventListener('click', () =>
+      openPhotoViewer(urls, Number(btn.getAttribute('data-photo-index'))));
+  });
 }
+
+// ---- Photo viewer -------------------------------------------------------
+// A thumbnail used to be a link to the file, so tapping one left the app for a
+// browser tab holding a single image, with the other photos of the same report
+// nowhere in reach. They are one set and are read as one.
+let viewerUrls = [];
+let viewerAt = 0;
+
+function openPhotoViewer(urls, index) {
+  viewerUrls = urls;
+  viewerAt = index;
+  const box = document.getElementById('photoViewer');
+  box.hidden = false;
+  document.body.style.overflow = 'hidden';   // the page must not scroll behind it
+  paintPhotoViewer();
+  box.querySelector('[data-pv-close]').focus();
+}
+
+function paintPhotoViewer() {
+  const box = document.getElementById('photoViewer');
+  document.getElementById('photoViewerImg').src = viewerUrls[viewerAt];
+  document.getElementById('photoViewerCount').textContent =
+    t('photo.counter', { index: viewerAt + 1, total: viewerUrls.length });
+  // Labels are painted here so a language switch mid-view is picked up too.
+  box.querySelector('[data-pv-close]').setAttribute('aria-label', t('photo.close'));
+  box.querySelector('.pv-nav.prev').setAttribute('aria-label', t('photo.prev'));
+  box.querySelector('.pv-nav.next').setAttribute('aria-label', t('photo.next'));
+  // A single photo has nowhere to step.
+  box.querySelectorAll('.pv-nav').forEach(b => { b.hidden = viewerUrls.length < 2; });
+  document.getElementById('photoViewerCount').hidden = viewerUrls.length < 2;
+}
+
+function stepPhoto(by) {
+  if (viewerUrls.length < 2) return;
+  viewerAt = (viewerAt + by + viewerUrls.length) % viewerUrls.length;
+  paintPhotoViewer();
+}
+
+function closePhotoViewer() {
+  document.getElementById('photoViewer').hidden = true;
+  document.getElementById('photoViewerImg').src = '';   // stop holding the bytes
+  document.body.style.overflow = '';
+}
+
+(function wirePhotoViewer() {
+  const box = document.getElementById('photoViewer');
+  box.addEventListener('click', (e) => {
+    const step = e.target.closest('[data-pv-step]');
+    if (step) { stepPhoto(Number(step.getAttribute('data-pv-step'))); return; }
+    if (e.target.closest('[data-pv-close]') || e.target === box) closePhotoViewer();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (box.hidden) return;
+    if (e.key === 'Escape') closePhotoViewer();
+    else if (e.key === 'ArrowRight') stepPhoto(1);
+    else if (e.key === 'ArrowLeft') stepPhoto(-1);
+  });
+  // A phone has no arrow keys, and a swipe is what a hand reaches for.
+  let startX = null;
+  box.addEventListener('touchstart', (e) => { startX = e.changedTouches[0].clientX; }, { passive: true });
+  box.addEventListener('touchend', (e) => {
+    if (startX === null) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    startX = null;
+    if (Math.abs(dx) > 50) stepPhoto(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 
 async function loadComments(card, requestId) {
   const { data: comments } = await sb.from('rental_maintenance_comments')
