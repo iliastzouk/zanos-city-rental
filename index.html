@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911j">
+<link rel="stylesheet" href="style.css?v=20260911k">
 </head>
 <body>
 
@@ -310,6 +310,9 @@
     <div class="tab-panel" data-panel="messages" hidden>
       <div class="card">
         <h2 data-i18n="msg.ownerTitle">Μηνύματα με τον ενοικιαστή</h2>
+        <p id="messagesForWho" class="muted"></p>
+        <label data-i18n="pay.forTenancy">Μίσθωση</label>
+        <select id="messagesTenancy"></select>
         <div id="ownerMessagesList" class="messages-list"></div>
         <form id="ownerMessageForm" class="message-form">
           <input type="text" id="ownerMessageInput" data-i18n-placeholder="msg.placeholder" placeholder="Γράψε μήνυμα…" required>
@@ -357,13 +360,20 @@
       </div>
       <div class="card">
         <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <p id="docsForWho" class="muted"></p>
+        <label data-i18n="pay.forTenancy">Μίσθωση</label>
+        <select id="docsTenancy"></select>
         <div id="ownerDocList" class="list"></div>
       </div>
     </div>
 
     <div class="tab-panel" data-panel="info" hidden>
       <div class="card">
-        <h2 data-i18n="info.formTitle">Νέα πληροφορία</h2>
+        <h2 id="infoFormTitle" data-i18n="info.formTitle">Νέα πληροφορία</h2>
+        <p id="infoEditNote" class="muted" hidden>
+          <strong id="infoEditWhat"></strong> ·
+          <button type="button" id="cancelInfoEdit" class="btn-link" data-i18n="info.cancelEdit">Ακύρωση</button>
+        </p>
         <form id="infoForm">
           <label data-i18n="info.title">Τίτλος</label>
           <input type="text" id="infoTitle" data-i18n-placeholder="info.titlePlaceholder" placeholder="π.χ. Κωδικός εξώπορτας" required>
@@ -521,7 +531,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911j"></script>
-<script src="app.js?v=20260911j"></script>
+<script src="i18n.js?v=20260911k"></script>
+<script src="app.js?v=20260911k"></script>
 </body>
 </html>

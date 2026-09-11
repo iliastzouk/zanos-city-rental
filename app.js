@@ -27,6 +27,9 @@ let editingPaymentDue = null;
 let allTenancies = [];        // every tenancy of the property, newest first
 let paymentsTenancyId = null; // which one the Payments tab is showing
 let maintTenancyId = null;    // and which one the Maintenance tab is showing
+let messagesTenancyId = null;
+let docsTenancyId = null;
+let editingInfoId = null;
 const MAX_PHOTOS = 5;
 
 // ---------- View management ----------
@@ -312,6 +315,8 @@ async function refreshTenancies() {
   const fallback = currentTenancy ? currentTenancy.id : (allTenancies[0] || {}).id || null;
   if (!allTenancies.some(item => item.id === paymentsTenancyId)) paymentsTenancyId = fallback;
   if (!allTenancies.some(item => item.id === maintTenancyId)) maintTenancyId = fallback;
+  if (!allTenancies.some(item => item.id === messagesTenancyId)) messagesTenancyId = fallback;
+  if (!allTenancies.some(item => item.id === docsTenancyId)) docsTenancyId = fallback;
 
   const el = document.getElementById('tenancyHistory');
   if (!tenancies || tenancies.length === 0) {
@@ -529,26 +534,32 @@ function tenancyLabel(tenancy) {
   });
 }
 
+// Every owner tab that is scoped to a tenancy fills its selector the same way.
+function fillTenancySelect(selectId, selectedId, headingId, headingKey) {
+  document.getElementById(selectId).innerHTML = allTenancies.map(item =>
+    `<option value="${item.id}"${item.id === selectedId ? ' selected' : ''}>${
+      escapeHtml(tenancyLabel(item))}${item.status === 'active' ? ' ✓' : ''}</option>`).join('');
+
+  const tenancy = allTenancies.find(item => item.id === selectedId) || null;
+  document.getElementById(headingId).textContent = tenancy
+    ? t(headingKey, { name: tenancy.tenant_name || t('tenancy.defaultTenant') })
+    : '';
+  return tenancy;
+}
+
 function paymentsTenancy() {
   return allTenancies.find(item => item.id === paymentsTenancyId) || null;
 }
 
 function refreshPaymentsHeader() {
-  const select = document.getElementById('paymentsTenancy');
-  select.innerHTML = allTenancies.map(item =>
-    `<option value="${item.id}"${item.id === paymentsTenancyId ? ' selected' : ''}>${
-      escapeHtml(tenancyLabel(item))}${item.status === 'active' ? ' ✓' : ''}</option>`).join('');
-
   // Without this the list was just "Payments", with no sign of whose.
+  fillTenancySelect('paymentsTenancy', paymentsTenancyId, 'paymentForWho', 'pay.showing');
+
   const dueField = document.getElementById('paymentDue');
   if (!editingPaymentId && !dueField.value) {
     dueField.value = new Date().toISOString().slice(0, 10);
   }
 
-  const tenancy = paymentsTenancy();
-  document.getElementById('paymentForWho').textContent = tenancy
-    ? t('pay.showing', { name: tenancy.tenant_name || t('tenancy.defaultTenant') })
-    : '';
 }
 
 async function refreshOwnerPayments() {
@@ -772,16 +783,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
 });
 
 async function refreshOwnerMaintenance() {
-  const select = document.getElementById('maintTenancy');
-  select.innerHTML = allTenancies.map(item =>
-    `<option value="${item.id}"${item.id === maintTenancyId ? ' selected' : ''}>${
-      escapeHtml(tenancyLabel(item))}${item.status === 'active' ? ' ✓' : ''}</option>`).join('');
-
-  const tenancy = allTenancies.find(item => item.id === maintTenancyId) || null;
-  document.getElementById('maintForWho').textContent = tenancy
-    ? t('maint.showing', { name: tenancy.tenant_name || t('tenancy.defaultTenant') })
-    : '';
-
+  fillTenancySelect('maintTenancy', maintTenancyId, 'maintForWho', 'maint.showing');
   await renderMaintenanceList('ownerMaintenanceList', true);
 }
 
@@ -793,18 +795,29 @@ async function refreshOwnerMaintenance() {
 });
 
 async function refreshOwnerMessages() {
-  if (!currentTenancy) {
+  const tenancy = fillTenancySelect('messagesTenancy', messagesTenancyId, 'messagesForWho', 'msg.showing');
+  if (!tenancy) {
     document.getElementById('ownerMessagesList').innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
-  await renderMessages('ownerMessagesList', currentTenancy.id);
+  await renderMessages('ownerMessagesList', tenancy.id);
 }
+
+document.getElementById('messagesTenancy').addEventListener('change', async (e) => {
+  messagesTenancyId = e.target.value;
+  await refreshOwnerMessages();
+});
 
 document.getElementById('ownerMessageForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!currentTenancy) { alert(t('need.tenancyFirst')); return; }
+  if (!messagesTenancyId) { alert(t('need.tenancyFirst')); return; }
   const input = document.getElementById('ownerMessageInput');
-  await sb.from('rental_messages').insert({ tenancy_id: currentTenancy.id, author_id: currentUser.id, body: input.value.trim() });
+  // "required" lets a run of spaces through, which stored an empty message.
+  const body = input.value.trim();
+  if (!body) { alert(t('msg.blank')); return; }
+  const { error } = await sb.from('rental_messages')
+    .insert({ tenancy_id: messagesTenancyId, author_id: currentUser.id, body });
+  if (error) { reportFailure('messages.send', error); return; }
   input.value = '';
   await refreshOwnerMessages();
 });
@@ -823,7 +836,7 @@ async function refreshPropertyInfo() {
     el.innerHTML = `<span class="muted">${t('info.empty')}</span>`;
     return;
   }
-  el.innerHTML = entries.map(entry => `
+  el.innerHTML = entries.map((entry, index) => `
     <div class="list-item">
       <div class="main">
         <div class="title">${escapeHtml(entry.title)}</div>
@@ -832,8 +845,38 @@ async function refreshPropertyInfo() {
       <span class="pill ${entry.visible_to_guests ? 'paid' : 'pending'}">
         ${entry.visible_to_guests ? t('info.badgeGuest') : t('info.badgeTenantOnly')}
       </span>
+      <button class="btn-small" data-move-info="${entry.id}" data-dir="-1"${
+        index === 0 ? ' disabled' : ''}>${t('info.moveUp')}</button>
+      <button class="btn-small" data-move-info="${entry.id}" data-dir="1"${
+        index === entries.length - 1 ? ' disabled' : ''}>${t('info.moveDown')}</button>
+      <button class="btn-small" data-edit-info="${entry.id}">${t('info.edit')}</button>
       <button class="btn-small danger" data-delete-info="${entry.id}">${t('info.delete')}</button>
     </div>`).join('');
+
+  el.querySelectorAll('[data-edit-info]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      startInfoEdit(entries.find(x => x.id === btn.getAttribute('data-edit-info')));
+    });
+  });
+
+  // Swap sort_order with the neighbour rather than renumbering the whole list.
+  el.querySelectorAll('[data-move-info]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-move-info');
+      const dir = Number(btn.getAttribute('data-dir'));
+      const from = entries.findIndex(x => x.id === id);
+      const to = from + dir;
+      if (to < 0 || to >= entries.length) return;
+      const a = entries[from];
+      const b = entries[to];
+      const { error: e1 } = await sb.from('rental_property_info')
+        .update({ sort_order: b.sort_order }).eq('id', a.id);
+      const { error: e2 } = await sb.from('rental_property_info')
+        .update({ sort_order: a.sort_order }).eq('id', b.id);
+      if (e1 || e2) { reportFailure('info.reorder', e1 || e2); return; }
+      await refreshPropertyInfo();
+    });
+  });
 
   el.querySelectorAll('[data-delete-info]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -844,18 +887,54 @@ async function refreshPropertyInfo() {
   });
 }
 
+function startInfoEdit(entry) {
+  if (!entry) return;
+  editingInfoId = entry.id;
+  document.getElementById('infoTitle').value = entry.title;
+  document.getElementById('infoBody').value = entry.body || '';
+  document.getElementById('infoVisibleToGuests').checked = entry.visible_to_guests;
+  document.getElementById('infoEditWhat').textContent = t('info.editing', { title: entry.title });
+  document.getElementById('infoEditNote').hidden = false;
+  document.querySelector('#infoForm button[type=submit]').textContent = t('info.update');
+  document.getElementById('infoForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelInfoEdit() {
+  editingInfoId = null;
+  document.getElementById('infoForm').reset();
+  document.getElementById('infoVisibleToGuests').checked = true;
+  document.getElementById('infoEditNote').hidden = true;
+  document.querySelector('#infoForm button[type=submit]').textContent = t('info.add');
+}
+
+document.getElementById('cancelInfoEdit').addEventListener('click', cancelInfoEdit);
+
 document.getElementById('infoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const { error } = await sb.from('rental_property_info').insert({
-    property_id: currentProperty.id,
+  const payload = {
     title: document.getElementById('infoTitle').value.trim(),
     body: document.getElementById('infoBody').value.trim() || null,
-    visible_to_guests: document.getElementById('infoVisibleToGuests').checked,
-    created_by: currentUser.id
-  });
-  if (error) { alert(t('error', { msg: error.message })); return; }
-  e.target.reset();
-  document.getElementById('infoVisibleToGuests').checked = true;
+    visible_to_guests: document.getElementById('infoVisibleToGuests').checked
+  };
+
+  let error;
+  if (editingInfoId) {
+    ({ error } = await sb.from('rental_property_info').update(payload).eq('id', editingInfoId));
+  } else {
+    // Nothing ever set sort_order, so every entry sat at 0 and the list came
+    // back in whatever order the database felt like. New entries go last.
+    const { data: last } = await sb.from('rental_property_info')
+      .select('sort_order').eq('property_id', currentProperty.id)
+      .order('sort_order', { ascending: false }).limit(1).maybeSingle();
+    ({ error } = await sb.from('rental_property_info').insert({
+      ...payload,
+      property_id: currentProperty.id,
+      sort_order: ((last && last.sort_order) || 0) + 1,
+      created_by: currentUser.id
+    }));
+  }
+  if (error) { reportFailure('info.save', error); return; }
+  cancelInfoEdit();
   await refreshPropertyInfo();
 });
 
@@ -1077,15 +1156,22 @@ async function renderCalendar(prefix) {
 
 function docCategoryLabel(v) { return enumLabel('doccat', v); }
 
+function documentsTenancyId() {
+  return docsTenancyId;
+}
+
 async function refreshDocuments(prefix) {
   const canManage = prefix === 'owner';
   const el = document.getElementById(prefix + 'DocList');
-  if (!currentTenancy) {
+  const tenancy = canManage
+    ? fillTenancySelect('docsTenancy', docsTenancyId, 'docsForWho', 'doc.showing')
+    : currentTenancy;
+  if (!tenancy) {
     el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
   const { data: docs, error } = await sb.from('rental_documents')
-    .select('*').eq('tenancy_id', currentTenancy.id)
+    .select('*').eq('tenancy_id', tenancy.id)
     .order('created_at', { ascending: false });
   if (error) { reportFailure('documents.load', error); return; }
 
@@ -1123,18 +1209,18 @@ function wireDocumentUpload(prefix) {
   document.getElementById(prefix + 'DocForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const msg = document.getElementById(prefix + 'DocMsg');
-    if (!currentTenancy) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
+    if (!docsTenancyId) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
 
     const file = document.getElementById(prefix + 'DocFile').files[0];
     if (!file) return;
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
     setMsg(msg, t('doc.uploading'), '');
-    const { path, error: upErr } = await uploadTenancyFile(file, 'documents', currentTenancy.id);
+    const { path, error: upErr } = await uploadTenancyFile(file, 'documents', docsTenancyId);
     if (upErr) { reportFailure('documents.upload', upErr, msg); return; }
 
     const { error: rowErr } = await sb.from('rental_documents').insert({
-      tenancy_id: currentTenancy.id,
+      tenancy_id: docsTenancyId,
       title: document.getElementById(prefix + 'DocTitle').value.trim(),
       category: document.getElementById(prefix + 'DocCategory').value,
       storage_path: path,
@@ -1155,6 +1241,11 @@ function wireDocumentUpload(prefix) {
 }
 
 // Only the owner uploads; the tenant's tab is a read-only list.
+document.getElementById('docsTenancy').addEventListener('change', async (e) => {
+  docsTenancyId = e.target.value;
+  await refreshDocuments('owner');
+});
+
 wireDocumentUpload('owner');
 
 // ============================================================
@@ -1320,7 +1411,11 @@ document.getElementById('tenantMessageForm').addEventListener('submit', async (e
   e.preventDefault();
   if (!currentTenancy) { alert(t('need.noActiveTenancy')); return; }
   const input = document.getElementById('tenantMessageInput');
-  await sb.from('rental_messages').insert({ tenancy_id: currentTenancy.id, author_id: currentUser.id, body: input.value.trim() });
+  const body = input.value.trim();
+  if (!body) { alert(t('msg.blank')); return; }
+  const { error } = await sb.from('rental_messages')
+    .insert({ tenancy_id: currentTenancy.id, author_id: currentUser.id, body });
+  if (error) { reportFailure('messages.send', error); return; }
   input.value = '';
   await refreshTenantMessages();
 });
