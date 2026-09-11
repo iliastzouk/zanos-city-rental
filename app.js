@@ -157,10 +157,25 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   await boot();
 });
 
-document.getElementById('magicLinkBtn').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value.trim();
+// Both the magic link and the reset use the same email box as the sign-in form,
+// so neither asks for the address twice. This reports the problem in our own
+// words rather than leaving one button on the browser's native bubble and the
+// other on ours, and puts the cursor back where the fix is. The button stays
+// enabled: a dead button that does nothing when tapped explains less than a
+// sentence saying what is missing.
+function loginEmailOrComplain() {
+  const field = document.getElementById('loginEmail');
   const msg = document.getElementById('loginMsg');
-  if (!email) { document.getElementById('loginEmail').reportValidity(); return; }
+  const email = field.value.trim();
+  if (!email) { setMsg(msg, t('login.needEmail'), 'error'); field.focus(); return null; }
+  if (!field.checkValidity()) { setMsg(msg, t('login.invalidEmail'), 'error'); field.focus(); return null; }
+  return email;
+}
+
+document.getElementById('magicLinkBtn').addEventListener('click', async () => {
+  const msg = document.getElementById('loginMsg');
+  const email = loginEmailOrComplain();
+  if (!email) return;
   setMsg(msg, t('login.sending'), '');
   const { error } = await sendMagicLink(email);
   if (error) setMsg(msg, authErrorText(error), 'error');
@@ -213,9 +228,9 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
 // Password sign-in existed with no way back in after forgetting one, which
 // stranded the tenant completely — they have no other route.
 document.getElementById('forgotPassword').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value.trim();
   const msg = document.getElementById('loginMsg');
-  if (!email) { setMsg(msg, t('login.needEmail'), 'error'); return; }
+  const email = loginEmailOrComplain();
+  if (!email) return;
 
   setMsg(msg, t('login.sending'), '');
   const { error } = await sb.auth.resetPasswordForEmail(email, {
