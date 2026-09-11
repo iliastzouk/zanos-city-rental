@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911l">
+<link rel="stylesheet" href="style.css?v=20260911m">
 </head>
 <body>
 
@@ -14,7 +14,10 @@
   <div class="topbar-inner">
     <span class="brand" data-i18n="brand">🏠 Zanos City — Διαχείριση</span>
     <div class="topbar-actions">
-      <button id="langToggle" class="btn-lang" type="button" data-i18n="lang.other">EN</button>
+      <div class="lang-switch" role="group">
+        <button type="button" class="btn-lang" data-lang="el">ΕΛ</button>
+        <button type="button" class="btn-lang" data-lang="en">EN</button>
+      </div>
       <div id="userBox" class="user-box" hidden>
         <span id="userEmail"></span>
         <button id="passwordToggle" class="btn-link" data-i18n="account.button">Κωδικός</button>
@@ -29,7 +32,7 @@
   <!-- SET PASSWORD (available to any signed-in user) -->
   <div id="passwordPanel" class="card" hidden>
     <h2 data-i18n="account.title">Ορισμός κωδικού πρόσβασης</h2>
-    <p class="muted" data-i18n="account.hint">Όρισε κωδικό για να μπαίνεις χωρίς να περιμένεις email.</p>
+    <p class="muted" id="accountHint" data-i18n="account.hint">Όρισε κωδικό για να μπαίνεις χωρίς να περιμένεις email.</p>
     <form id="passwordForm">
       <label data-i18n="account.newPassword">Νέος κωδικός (τουλάχιστον 8 χαρακτήρες)</label>
       <input type="password" id="newPassword" minlength="8" required autocomplete="new-password">
@@ -49,7 +52,8 @@
         <input type="password" id="loginPassword" data-i18n-placeholder="login.passwordPlaceholder" placeholder="Ο κωδικός σου" autocomplete="current-password">
         <button type="submit" class="btn-primary" data-i18n="login.signIn">Σύνδεση</button>
       </form>
-      <button id="createAccountBtn" class="btn-secondary" type="button" data-i18n="login.createAccount">Δημιουργία νέου λογαριασμού</button>
+      <button id="forgotPassword" class="btn-link" type="button" data-i18n="login.forgot">Ξέχασες τον κωδικό;</button>
+      <button id="createAccountBtn" class="btn-link create-link" type="button" data-i18n="login.createAccount">Δημιουργία νέου λογαριασμού</button>
       <hr class="soft-rule">
       <h2 class="sub-head" data-i18n="login.magicTitle">Σύνδεση χωρίς κωδικό</h2>
       <p class="muted small-note" data-i18n="login.magicHint">Θα σου στείλουμε ένα link στο email σου.</p>
@@ -547,7 +551,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911l"></script>
-<script src="app.js?v=20260911l"></script>
+<script src="i18n.js?v=20260911m"></script>
+<script src="app.js?v=20260911m"></script>
 </body>
 </html>

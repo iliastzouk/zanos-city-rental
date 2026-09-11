@@ -210,6 +210,22 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
   setMsg(msg, t('signup.checkEmail', { email }), 'ok');
 });
 
+// Password sign-in existed with no way back in after forgetting one, which
+// stranded the tenant completely — they have no other route.
+document.getElementById('forgotPassword').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const msg = document.getElementById('loginMsg');
+  if (!email) { setMsg(msg, t('login.needEmail'), 'error'); return; }
+
+  setMsg(msg, t('login.sending'), '');
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) { setMsg(msg, authErrorText(error), 'error'); return; }
+  // Deliberately the same wording whether or not the address is registered.
+  setMsg(msg, t('login.resetSent'), 'ok');
+});
+
 // ---------- Setting a password ----------
 document.getElementById('passwordToggle').addEventListener('click', () => {
   const panel = document.getElementById('passwordPanel');
@@ -1650,8 +1666,13 @@ async function boot() {
   }
 }
 
-sb.auth.onAuthStateChange((_event, _session) => {
-  boot();
+sb.auth.onAuthStateChange(async (event) => {
+  await boot();
+  if (event === 'PASSWORD_RECOVERY') {
+    document.getElementById('passwordPanel').hidden = false;
+    document.getElementById('accountHint').textContent = t('account.recoveryHint');
+    document.getElementById('passwordPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 });
 
 // ---------- Language ----------

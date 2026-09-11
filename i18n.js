@@ -13,7 +13,6 @@ const TRANSLATIONS = {
     'app.title': 'Zanos City — Διαχείριση Ενοικίασης',
     'brand': '🏠 Zanos City — Διαχείριση',
     'signOut': 'Αποσύνδεση',
-    'lang.other': 'EN',
 
     'login.title': 'Σύνδεση',
     'login.hint': 'Μπες με email και κωδικό. Αν δεν έχεις λογαριασμό, φτιάξε έναν.',
@@ -31,8 +30,12 @@ const TRANSLATIONS = {
     'login.guestTitle': 'Είσοδος επισκέπτη',
     'login.guestHint': 'Βάλε τον κωδικό που σου έδωσε ο ιδιοκτήτης. Δεν χρειάζεται λογαριασμός.',
 
+    'login.forgot': 'Ξέχασες τον κωδικό;',
+    'login.resetSent': 'Αν υπάρχει λογαριασμός με αυτό το email, στάλθηκε σύνδεσμος επαναφοράς.',
+    'login.needEmail': 'Γράψε πρώτα το email σου.',
+    'account.recoveryHint': 'Όρισε τον νέο σου κωδικό.',
     'login.magicTitle': 'Σύνδεση χωρίς κωδικό',
-    'login.magicHint': 'Θα σου στείλουμε ένα link στο email σου και μπαίνεις με ένα πάτημα. Είναι κανονικός τρόπος σύνδεσης — δεν χρειάζεται ποτέ να ορίσεις κωδικό.',
+    'login.magicHint': 'Σου στέλνουμε σύνδεσμο στο email και μπαίνεις με ένα πάτημα. Κανονικός τρόπος σύνδεσης — κωδικός δεν χρειάζεται ποτέ.',
 
     'signup.title': 'Δημιουργία λογαριασμού',
     'signup.hint': 'Θα σου στείλουμε email επιβεβαίωσης για να ενεργοποιήσεις τον λογαριασμό.',
@@ -336,7 +339,6 @@ const TRANSLATIONS = {
     'app.title': 'Zanos City — Rental Management',
     'brand': '🏠 Zanos City — Management',
     'signOut': 'Sign out',
-    'lang.other': 'ΕΛ',
 
     'login.title': 'Sign in',
     'login.hint': 'Sign in with your email and password. No account yet? Create one.',
@@ -354,8 +356,12 @@ const TRANSLATIONS = {
     'login.guestTitle': 'Guest access',
     'login.guestHint': 'Enter the code the owner gave you. No account needed.',
 
+    'login.forgot': 'Forgot your password?',
+    'login.resetSent': 'If an account exists for this address, a reset link has been sent.',
+    'login.needEmail': 'Enter your email first.',
+    'account.recoveryHint': 'Set your new password.',
     'login.magicTitle': 'Sign in without a password',
-    'login.magicHint': 'We email you a link and you are in with one tap. This is a full sign-in method on its own — you never have to set a password.',
+    'login.magicHint': 'We email you a link and you are in with one tap. A full sign-in method — no password ever needed.',
 
     'signup.title': 'Create an account',
     'signup.hint': 'We will send a confirmation email to activate the account.',
@@ -696,6 +702,7 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
   });
+  paintLangSwitch();
 }
 
 function setLang(lang) {
@@ -703,15 +710,23 @@ function setLang(lang) {
   currentLang = lang;
   localStorage.setItem(LANG_STORAGE_KEY, lang);
   applyStaticTranslations();
+  paintLangSwitch();
   document.dispatchEvent(new CustomEvent('langchange'));
 }
 
-function toggleLang() {
-  setLang(currentLang === 'el' ? 'en' : 'el');
+// Both languages are shown, with the active one marked, so the control cannot be
+// misread as an abbreviation or as naming the language you are already in.
+function paintLangSwitch() {
+  document.querySelectorAll('[data-lang]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
+    btn.setAttribute('aria-pressed', String(btn.getAttribute('data-lang') === currentLang));
+  });
 }
 
 // Self-contained: the language switcher must work even if app.js fails to load.
 document.addEventListener('DOMContentLoaded', () => {
   applyStaticTranslations();
-  document.getElementById('langToggle').addEventListener('click', toggleLang);
+  document.querySelectorAll('[data-lang]').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.getAttribute('data-lang')));
+  });
 });

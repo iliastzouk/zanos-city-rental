@@ -61,6 +61,8 @@ h2{font-size:1.1rem;}
   padding:22px; margin-bottom:18px; box-shadow:var(--shadow);
 }
 .center-card{max-width:440px; margin:60px auto;}
+/* On a phone that 60px pushes the form well below the fold for no benefit. */
+@media (max-width:640px){ .center-card{margin:20px auto;} }
 
 label{display:block; font-size:.82rem; font-weight:600; margin:12px 0 5px; color:var(--text-soft);}
 input, select, textarea{
@@ -221,3 +223,14 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .dot.guest{background:var(--text-soft);}
 .cal-cell.selected .dot{outline:1px solid #fff;}
 .cal-day-head{font-weight:700; margin:4px 0 8px;}
+
+/* Both languages visible, the active one filled in. */
+.lang-switch{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+.lang-switch .btn-lang{border:none; border-radius:0; background:var(--bg-alt);}
+.lang-switch .btn-lang + .btn-lang{border-left:1px solid var(--line);}
+.lang-switch .btn-lang.active{background:var(--accent); color:#fff;}
+.lang-switch .btn-lang.active:hover{background:var(--accent-dark);}
+
+/* Creating an account is rare here, so it steps back from the primary action. */
+#forgotPassword{display:block; margin:14px auto 0;}
+.create-link{display:block; margin:12px auto 0; font-weight:600;}
