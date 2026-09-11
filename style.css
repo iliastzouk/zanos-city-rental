@@ -137,8 +137,6 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .pill.in_progress{background:#fdf1dc; color:var(--warn);}
 .pill.resolved, .pill.closed{background:#e6f4ea; color:var(--ok);}
 .pill.low{background:var(--bg-alt); color:var(--text-soft);}
-/* Money that is real but not wanted yet: present, deliberately quiet. */
-.pill.scheduled{background:var(--bg-alt); color:var(--text-soft); border:1px dashed var(--line);}
 .pill.medium{background:#fdf1dc; color:var(--warn);}
 .pill.high, .pill.urgent{background:#fbe9e7; color:var(--danger);}
 

@@ -1533,17 +1533,21 @@ async function refreshTenantPayments() {
   const bucketPill = (cls, key, list) => list.length
     ? `<span class="pill ${cls}">${t(key, { amount: fmtMoney(total(list)), count: list.length })}</span>`
     : '';
-  const upcoming = unpaid
+  // The single next obligation, named with its amount — the second question a
+  // tenant actually has after "do I owe anything now?".
+  const nextUp = unpaid
     .filter(p => p.due_date && !isOverdue(p))
-    .map(p => p.due_date).sort()[0];
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
 
+  // Deliberately no total for the scheduled months. It is a true number that
+  // answers a question nobody asked, and reads as a debt that is not owed. The
+  // list below carries every one of them for anyone who wants to look.
   sumEl.innerHTML = unpaid.length === 0
     ? `<span class="pill paid">${t('pay.allSettled')}</span>`
     : [
         bucketPill('overdue', 'pay.overdueCount', buckets.overdue),
         bucketPill('pending', 'pay.dueSoon', buckets.soon),
-        bucketPill('scheduled', 'pay.scheduled', buckets.scheduled),
-        upcoming ? `<span class="pill low">${t('pay.nextDue', { date: fmtDate(upcoming) })}</span>` : ''
+        nextUp ? `<span class="pill low">${t('pay.nextDue', { amount: fmtMoney(nextUp.amount), date: fmtDate(nextUp.due_date) })}</span>` : ''
       ].join('');
 
   const statusFilter = document.getElementById('tenantStatusFilter').value;
