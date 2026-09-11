@@ -153,6 +153,15 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .comment-form input{flex:1;}
 .comment-form button{white-space:nowrap;}
 
+/* The conversation is its own section of a report card, foldable when the
+   list is long enough that the replies would drown the reports. */
+.convo{margin-top:10px; border-top:1px solid var(--line); padding-top:10px;}
+.convo .comments{margin-top:0; border-top:none; padding-top:0;}
+.convo-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;}
+.section-head{font-weight:700; font-size:.82rem; text-transform:uppercase; letter-spacing:.4px; color:var(--text-soft);}
+.convo-collapsed{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+[data-show-all]{margin-bottom:10px;}
+
 .messages-list{display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto; margin-bottom:14px; padding-right:4px;}
 .message-bubble{padding:9px 13px; border-radius:12px; max-width:75%; font-size:.9rem;}
 .message-bubble.mine{background:var(--accent); color:#fff; align-self:flex-end;}

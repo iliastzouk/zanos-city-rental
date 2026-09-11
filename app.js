@@ -699,8 +699,8 @@ function paymentListHtml(payments, shown, rowHtml) {
   const rendered = Math.min(Math.max(shown, 1), payments.length);
   if (rendered < payments.length) {
     parts.push(`<div class="list-more">
-      <span class="muted">${t('pay.showingCount', { shown: rendered, total: payments.length })}</span>
-      <button class="btn-small" data-load-more>${t('pay.loadMore')}</button>
+      <span class="muted">${t('list.showingCount', { shown: rendered, total: payments.length })}</span>
+      <button class="btn-small" data-load-more>${t('list.loadMore')}</button>
     </div>`);
   }
   return parts.join('');
@@ -886,8 +886,14 @@ async function refreshOwnerMaintenance() {
 ['maintTenancy', 'maintStatusFilter', 'maintPriorityFilter'].forEach(id => {
   document.getElementById(id).addEventListener('change', async (e) => {
     if (id === 'maintTenancy') maintTenancyId = e.target.value;
+    maintShown.ownerMaintenanceList = MAINT_PAGE_SIZE;   // start at the top again
     await refreshOwnerMaintenance();
   });
+});
+
+document.getElementById('tenantMaintStatusFilter').addEventListener('change', () => {
+  maintShown.tenantMaintenanceList = MAINT_PAGE_SIZE;
+  refreshTenantMaintenance();
 });
 
 async function refreshOwnerMessages() {
@@ -1584,6 +1590,26 @@ document.getElementById('tenantMessageForm').addEventListener('submit', async (e
 // Shared: Maintenance list + comments (used by both dashboards)
 // ============================================================
 
+// ---- Maintenance history: pageable, with foldable conversations -----------
+const MAINT_PAGE_SIZE = 10;
+// With only a handful of reports on screen every conversation is worth reading
+// at once; past that the page turns into a wall of replies.
+const MAINT_AUTO_OPEN_MAX = 3;
+const COMMENT_PREVIEW = 3;
+const maintShown = { ownerMaintenanceList: MAINT_PAGE_SIZE, tenantMaintenanceList: MAINT_PAGE_SIZE };
+const openConversations = new Set();    // opened by hand, against the default
+const closedConversations = new Set();  // folded by hand, against the default
+const fullComments = new Set();         // showing every reply, not just the tail
+
+// The status is the single source of truth for whether the work is done; a
+// stale completion date must never contradict it on screen.
+function isSettled(r) { return r.status === 'resolved' || r.status === 'closed'; }
+
+function commentCountLabel(n) {
+  if (n === 0) return t('maint.noComments');
+  return n === 1 ? t('maint.commentCountOne') : t('maint.commentCount', { count: n });
+}
+
 async function renderMaintenanceList(containerId, isOwner) {
   const el = document.getElementById(containerId);
 
@@ -1603,7 +1629,8 @@ async function renderMaintenanceList(containerId, isOwner) {
     return;
   }
 
-  const statusFilter = isOwner ? document.getElementById('maintStatusFilter').value : 'all';
+  const statusFilter = document.getElementById(
+    isOwner ? 'maintStatusFilter' : 'tenantMaintStatusFilter').value;
   const priorityFilter = isOwner ? document.getElementById('maintPriorityFilter').value : 'all';
   const requests = all.filter(r =>
     (statusFilter === 'all' || r.status === statusFilter) &&
@@ -1614,12 +1641,17 @@ async function renderMaintenanceList(containerId, isOwner) {
     return;
   }
 
-  el.innerHTML = requests.map(r => `
+  const shown = Math.max(maintShown[containerId] || MAINT_PAGE_SIZE, 1);
+  const page = requests.slice(0, shown);
+  // Every conversation open at once only reads well while there are few reports.
+  const autoOpen = page.length <= MAINT_AUTO_OPEN_MAX;
+
+  el.innerHTML = page.map(r => `
     <div class="request-card" data-request-id="${r.id}">
       <div class="head">
         <div>
           <div class="title">${escapeHtml(r.title)}</div>
-          <div class="sub">${fmtDate(r.created_at)}${r.resolved_at ? ' · ' + t('maint.resolvedOn', { date: fmtDate(r.resolved_at) }) : ''}</div>
+          <div class="sub">${fmtDate(r.created_at)}${isSettled(r) && r.resolved_at ? ' · ' + t('maint.resolvedOn', { date: fmtDate(r.resolved_at) }) : ''}</div>
         </div>
         <div>
           <span class="pill ${r.priority}">${priorityLabel(r.priority)}</span>
@@ -1635,17 +1667,31 @@ async function renderMaintenanceList(containerId, isOwner) {
           `).join('')}
           <button class="btn-small danger" data-delete-request="${escapeHtml(r.title)}">${t('maint.deleteReport')}</button>
         </div>` : ''}
-      <div class="comments" data-comments></div>
-      <form class="comment-form" data-comment-form>
-        <input type="text" placeholder="${t('maint.commentPlaceholder')}" required>
-        <button type="submit" class="btn-small">${t('maint.reply')}</button>
-      </form>
+      <div class="convo" data-convo></div>
     </div>
   `).join('');
 
+  if (page.length < requests.length) {
+    el.insertAdjacentHTML('beforeend', `<div class="list-more">
+      <span class="muted">${t('list.showingCount', { shown: page.length, total: requests.length })}</span>
+      <button class="btn-small" data-load-more>${t('list.loadMore')}</button>
+    </div>`);
+    el.querySelector('[data-load-more]').addEventListener('click', () => {
+      maintShown[containerId] = shown + MAINT_PAGE_SIZE;
+      renderMaintenanceList(containerId, isOwner);
+    });
+  }
+
+  // One query for every card's reply count, rather than one query per card.
+  const counts = {};
+  const { data: commentRows } = await sb.from('rental_maintenance_comments')
+    .select('request_id').in('request_id', page.map(r => r.id));
+  (commentRows || []).forEach(c => { counts[c.request_id] = (counts[c.request_id] || 0) + 1; });
+
   el.querySelectorAll('[data-request-id]').forEach(card => {
     const requestId = card.getAttribute('data-request-id');
-    loadComments(card, requestId);
+    renderConversation(card, requestId, counts[requestId] || 0,
+      openConversations.has(requestId) || (autoOpen && !closedConversations.has(requestId)));
     loadPhotos(card, requestId);
 
     const delBtn = card.querySelector('[data-delete-request]');
@@ -1667,22 +1713,66 @@ async function renderMaintenanceList(containerId, isOwner) {
       btn.addEventListener('click', async () => {
         const newStatus = btn.getAttribute('data-set-status');
         const patch = { status: newStatus, updated_at: new Date().toISOString() };
+        // Sending a report back to open work clears the completion date, so a
+        // card can never read "Resolved 10/09" beside IN PROGRESS. Closing one
+        // keeps it: the work really was finished on that date.
         if (newStatus === 'resolved') patch.resolved_at = new Date().toISOString();
+        else if (newStatus !== 'closed') patch.resolved_at = null;
         await sb.from('rental_maintenance_requests').update(patch).eq('id', requestId);
         await renderMaintenanceList(containerId, isOwner);
       });
     });
-
-    card.querySelector('[data-comment-form]').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = e.target.querySelector('input');
-      await sb.from('rental_maintenance_comments').insert({
-        request_id: requestId, author_id: currentUser.id, body: input.value.trim()
-      });
-      input.value = '';
-      loadComments(card, requestId);
-    });
   });
+}
+
+// The conversation is a section of its own, folded away when there are enough
+// reports on screen that the replies would drown the reports themselves.
+function renderConversation(card, requestId, count, open) {
+  const el = card.querySelector('[data-convo]');
+  if (!open) {
+    el.innerHTML = `<div class="convo-collapsed">
+      <span class="muted">${commentCountLabel(count)}</span>
+      <button class="btn-small" data-open-convo>${count ? t('maint.viewConversation') : t('maint.startConversation')}</button>
+    </div>`;
+    el.querySelector('[data-open-convo]').addEventListener('click', () => {
+      openConversations.add(requestId);
+      closedConversations.delete(requestId);
+      renderConversation(card, requestId, count, true);
+    });
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="convo-head">
+      <span class="section-head">${t('maint.conversation')}</span>
+      <button type="button" class="btn-link" data-close-convo>${t('maint.hideConversation')}</button>
+    </div>
+    <div class="comments" data-comments></div>
+    <form class="comment-form" data-comment-form>
+      <input type="text" placeholder="${t('maint.commentPlaceholder')}" required>
+      <button type="submit" class="btn-small">${t('maint.reply')}</button>
+    </form>`;
+
+  el.querySelector('[data-close-convo]').addEventListener('click', () => {
+    closedConversations.add(requestId);
+    openConversations.delete(requestId);
+    renderConversation(card, requestId, count, false);
+  });
+
+  el.querySelector('[data-comment-form]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = e.target.querySelector('input');
+    const body = input.value.trim();
+    if (!body) return;   // 'required' lets a run of spaces through
+    const { error } = await sb.from('rental_maintenance_comments').insert({
+      request_id: requestId, author_id: currentUser.id, body
+    });
+    if (error) { reportFailure('maintenance.comment', error); return; }
+    input.value = '';
+    loadComments(card, requestId);
+  });
+
+  loadComments(card, requestId);
 }
 
 // The bucket is private, so thumbnails need signed URLs of their own.
@@ -1704,13 +1794,30 @@ async function loadComments(card, requestId) {
   const { data: comments } = await sb.from('rental_maintenance_comments')
     .select('*').eq('request_id', requestId).order('created_at', { ascending: true });
   const el = card.querySelector('[data-comments]');
-  if (!comments || comments.length === 0) { el.innerHTML = ''; return; }
-  el.innerHTML = comments.map(c => `
+  if (!el) return;   // the conversation was folded away while this was loading
+  if (!comments || comments.length === 0) {
+    el.innerHTML = `<span class="muted">${t('maint.noComments')}</span>`;
+    return;
+  }
+
+  // A fault that drags on collects dozens of replies; show the latest few and
+  // let the reader ask for the rest.
+  const showAll = fullComments.has(requestId) || comments.length <= COMMENT_PREVIEW;
+  const visible = showAll ? comments : comments.slice(-COMMENT_PREVIEW);
+  el.innerHTML =
+    (showAll ? '' : `<button type="button" class="btn-small" data-show-all>${t('maint.showAllComments', { count: comments.length })}</button>`)
+    + visible.map(c => `
     <div class="comment">
       <span class="author">${c.author_id === currentUser.id ? t('party.you') : otherPartyLabel()}</span>
       <span class="comment-time">${fmtDateTime(c.created_at)}</span>
       <div class="comment-body">${escapeHtml(c.body)}</div>
     </div>`).join('');
+
+  const allBtn = el.querySelector('[data-show-all]');
+  if (allBtn) allBtn.addEventListener('click', () => {
+    fullComments.add(requestId);
+    loadComments(card, requestId);
+  });
 }
 
 // ============================================================

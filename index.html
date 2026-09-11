@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911q">
+<link rel="stylesheet" href="style.css?v=20260911r">
 </head>
 <body>
 
@@ -519,6 +519,18 @@
       </div>
       <div class="card">
         <h2 data-i18n="maint.myTitle">Οι αναφορές μου</h2>
+        <div class="form-row">
+          <div>
+            <label data-i18n="maint.filterStatus">Κατάσταση</label>
+            <select id="tenantMaintStatusFilter">
+              <option value="all" data-i18n="pay.filterAll">Όλες</option>
+              <option value="open" data-i18n="st.open">Ανοιχτό</option>
+              <option value="in_progress" data-i18n="st.in_progress">Σε εξέλιξη</option>
+              <option value="resolved" data-i18n="st.resolved">Επιλύθηκε</option>
+              <option value="closed" data-i18n="st.closed">Έκλεισε</option>
+            </select>
+          </div>
+        </div>
         <div id="tenantMaintenanceList" class="list"></div>
       </div>
     </div>
@@ -574,7 +586,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911q"></script>
-<script src="app.js?v=20260911q"></script>
+<script src="i18n.js?v=20260911r"></script>
+<script src="app.js?v=20260911r"></script>
 </body>
 </html>
