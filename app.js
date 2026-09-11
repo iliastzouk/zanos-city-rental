@@ -727,10 +727,25 @@ function paymentMonthGroups(payments) {
   return groups;
 }
 
+// The reader should land on the month they can act on. A lease with a year of
+// rent scheduled ahead would otherwise open on the furthest future month, with
+// anything overdue eleven groups down. Current month first, then back through
+// the history, and the scheduled months last — the dates label themselves, so
+// the three runs need no headings of their own.
+function orderPaymentGroups(groups) {
+  const thisMonth = isoDate(new Date()).slice(0, 7);
+  return [
+    ...groups.filter(g => !g.key),                            // undated: owed, not planned
+    ...groups.filter(g => g.key === thisMonth),
+    ...groups.filter(g => g.key && g.key < thisMonth),        // already newest-first
+    ...groups.filter(g => g.key && g.key > thisMonth).reverse()   // soonest first
+  ];
+}
+
 function paymentListHtml(payments, shown, rowHtml) {
   let left = Math.max(shown, 1);
   const parts = [];
-  for (const g of paymentMonthGroups(payments)) {
+  for (const g of orderPaymentGroups(paymentMonthGroups(payments))) {
     if (left <= 0) break;
     const rows = g.rows.slice(0, left);
     left -= rows.length;
