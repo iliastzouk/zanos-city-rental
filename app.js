@@ -18,6 +18,8 @@ let currentTenancy = null; // active tenancy (owner: latest active; tenant: thei
 let editingTenancyId = null;
 let editingPaymentId = null;
 let editingPaymentDue = null;
+let allTenancies = [];        // every tenancy of the property, newest first
+let paymentsTenancyId = null; // which one the Payments tab is showing
 
 // ---------- View management ----------
 function showView(id) {
@@ -237,9 +239,9 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
 
 // Files live under <tenancy_id>/..., which is what the storage policies read
 // to decide who may open them.
-async function uploadTenancyFile(file, folder) {
+async function uploadTenancyFile(file, folder, tenancyId) {
   const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
-  const path = `${currentTenancy.id}/${folder}/${crypto.randomUUID()}${ext}`;
+  const path = `${tenancyId}/${folder}/${crypto.randomUUID()}${ext}`;
   const { error } = await sb.storage.from('rental-documents').upload(path, file);
   return { path, error };
 }
@@ -279,7 +281,14 @@ async function refreshTenancies() {
   if (error) { reportFailure('tenancies.load', error); return; }
 
   // The rest of the dashboard keys off the active tenancy.
-  currentTenancy = (tenancies || []).find(item => item.status === 'active') || null;
+  allTenancies = tenancies || [];
+  currentTenancy = allTenancies.find(item => item.status === 'active') || null;
+
+  // Default the Payments tab to the active tenancy, but keep any explicit
+  // choice that still exists.
+  if (!allTenancies.some(item => item.id === paymentsTenancyId)) {
+    paymentsTenancyId = currentTenancy ? currentTenancy.id : (allTenancies[0] || {}).id || null;
+  }
 
   const el = document.getElementById('tenancyHistory');
   if (!tenancies || tenancies.length === 0) {
@@ -489,20 +498,66 @@ async function refreshPeople() {
   });
 }
 
+function tenancyLabel(tenancy) {
+  return t('pay.tenancyOption', {
+    name: tenancy.tenant_name || t('tenancy.defaultTenant'),
+    start: fmtDate(tenancy.start_date),
+    end: tenancy.end_date ? fmtDate(tenancy.end_date) : t('dash')
+  });
+}
+
+function paymentsTenancy() {
+  return allTenancies.find(item => item.id === paymentsTenancyId) || null;
+}
+
+function refreshPaymentsHeader() {
+  const select = document.getElementById('paymentsTenancy');
+  select.innerHTML = allTenancies.map(item =>
+    `<option value="${item.id}"${item.id === paymentsTenancyId ? ' selected' : ''}>${
+      escapeHtml(tenancyLabel(item))}${item.status === 'active' ? ' ✓' : ''}</option>`).join('');
+
+  // Without this the list was just "Payments", with no sign of whose.
+  const dueField = document.getElementById('paymentDue');
+  if (!editingPaymentId && !dueField.value) {
+    dueField.value = new Date().toISOString().slice(0, 10);
+  }
+
+  const tenancy = paymentsTenancy();
+  document.getElementById('paymentForWho').textContent = tenancy
+    ? t('pay.showing', { name: tenancy.tenant_name || t('tenancy.defaultTenant') })
+    : '';
+}
+
 async function refreshOwnerPayments() {
   const listEl = document.getElementById('ownerPaymentsList');
-  if (!currentTenancy) {
+  refreshPaymentsHeader();
+
+  const tenancy = paymentsTenancy();
+  if (!tenancy) {
     listEl.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
-  const { data: payments } = await sb.from('rental_payments')
-    .select('*').eq('tenancy_id', currentTenancy.id)
+  const { data: rows, error } = await sb.from('rental_payments')
+    .select('*').eq('tenancy_id', tenancy.id)
     .order('due_date', { ascending: false, nullsFirst: false });
+  if (error) { reportFailure('payments.load', error); return; }
 
-  if (!payments || payments.length === 0) {
+  if (!rows || rows.length === 0) {
     listEl.innerHTML = `<span class="muted">${t('pay.empty')}</span>`;
     return;
   }
+
+  const statusFilter = document.getElementById('paymentsStatusFilter').value;
+  const categoryFilter = document.getElementById('paymentsCategoryFilter').value;
+  const payments = rows.filter(p =>
+    (statusFilter === 'all' || p.status === statusFilter) &&
+    (categoryFilter === 'all' || p.category === categoryFilter));
+
+  if (payments.length === 0) {
+    listEl.innerHTML = `<span class="muted">${t('pay.noneForFilter')}</span>`;
+    return;
+  }
+
   listEl.innerHTML = payments.map(p => `
     <div class="list-item">
       <div class="main">
@@ -522,7 +577,7 @@ async function refreshOwnerPayments() {
 
   listEl.querySelectorAll('[data-edit-payment]').forEach(btn => {
     btn.addEventListener('click', () => {
-      startPaymentEdit(payments.find(p => p.id === btn.getAttribute('data-edit-payment')));
+      startPaymentEdit(rows.find(p => p.id === btn.getAttribute('data-edit-payment')));
     });
   });
 
@@ -586,11 +641,24 @@ function cancelPaymentEdit() {
   document.getElementById('paymentFormTitle').textContent = t('pay.formTitle');
   document.getElementById('paymentFileLabel').textContent = t('pay.attachment');
   document.getElementById('paymentEditNote').hidden = true;
+  document.getElementById('paymentNotesLabel').textContent = t('pay.notes');
   document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.submit');
   setMsg(document.getElementById('paymentMsg'), '', '');
+  // A new charge starts on today's date rather than an empty field.
+  document.getElementById('paymentDue').value = new Date().toISOString().slice(0, 10);
 }
 
 document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPaymentEdit);
+
+['paymentsTenancy', 'paymentsStatusFilter', 'paymentsCategoryFilter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', async (e) => {
+    if (id === 'paymentsTenancy') {
+      paymentsTenancyId = e.target.value;
+      cancelPaymentEdit();  // the charge being edited belongs to the other tenancy
+    }
+    await refreshOwnerPayments();
+  });
+});
 
 // An attachment makes no sense across a whole series, only on one charge.
 document.getElementById('paymentRecurring').addEventListener('change', (e) => {
@@ -602,12 +670,16 @@ document.getElementById('paymentRecurring').addEventListener('change', (e) => {
   if (blocked) file.value = '';
   document.getElementById('paymentFileLabel').textContent =
     blocked ? t('pay.attachmentNote') : t('pay.attachment');
+  // The same note text lands on all twelve rows, so "September rent" would be
+  // wrong on eleven of them.
+  document.getElementById('paymentNotesLabel').textContent =
+    e.target.checked ? t('pay.notesRecurring') : t('pay.notes');
 });
 
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const msg = document.getElementById('paymentMsg');
-  if (!currentTenancy) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
+  if (!paymentsTenancyId) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
 
   const category = document.getElementById('paymentCategory').value;
   const amount = parseFloat(document.getElementById('paymentAmount').value);
@@ -622,7 +694,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
     // Without a first date there is nothing to step monthly from.
     if (!due) { setMsg(msg, t('pay.needDueDate'), 'error'); return; }
     const { data: created, error } = await sb.rpc('rental_create_recurring_payments', {
-      p_tenancy_id: currentTenancy.id,
+      p_tenancy_id: paymentsTenancyId,
       p_category: category,
       p_amount: amount,
       p_first_due: due,
@@ -634,7 +706,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
     let proofPath;
     if (file) {
       setMsg(msg, t('doc.uploading'), '');
-      const { path, error: upErr } = await uploadTenancyFile(file, 'payments');
+      const { path, error: upErr } = await uploadTenancyFile(file, 'payments', paymentsTenancyId);
       if (upErr) { reportFailure('payments.upload', upErr, msg); return; }
       proofPath = path;
     }
@@ -645,7 +717,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
     const { error } = editingPaymentId
       ? await sb.from('rental_payments').update(payload).eq('id', editingPaymentId)
       : await sb.from('rental_payments').insert({
-          ...payload, tenancy_id: currentTenancy.id, created_by: currentUser.id
+          ...payload, tenancy_id: paymentsTenancyId, created_by: currentUser.id
         });
 
     if (error) {
@@ -661,7 +733,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
     if (recurring && editingPaymentId) {
       if (!due) { setMsg(msg, t('pay.recurringNeedsDue'), 'error'); return; }
       const { data: created, error: recErr } = await sb.rpc('rental_create_recurring_payments', {
-        p_tenancy_id: currentTenancy.id,
+        p_tenancy_id: paymentsTenancyId,
         p_category: category,
         p_amount: amount,
         p_first_due: nextMonth(due),
@@ -889,7 +961,7 @@ function wireDocumentUpload(prefix) {
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
     setMsg(msg, t('doc.uploading'), '');
-    const { path, error: upErr } = await uploadTenancyFile(file, 'documents');
+    const { path, error: upErr } = await uploadTenancyFile(file, 'documents', currentTenancy.id);
     if (upErr) { reportFailure('documents.upload', upErr, msg); return; }
 
     const { error: rowErr } = await sb.from('rental_documents').insert({
