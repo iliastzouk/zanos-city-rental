@@ -667,11 +667,17 @@ async function refreshOwnerPayments() {
     return;
   }
 
-  listEl.innerHTML = paymentListHtml(payments, ownerPayShown, p => `
+  const narrowed = statusFilter !== 'all' || categoryFilter !== 'all';
+  const render = narrowed ? paymentFlatHtml : paymentSectionsHtml;
+  listEl.innerHTML = render('ownerPaymentsList', payments, p => `
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+        <div class="sub">${[
+          p.due_date ? t('pay.dueLabel') + ': ' + fmtDate(p.due_date) : '',
+          p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : '',
+          p.notes ? escapeHtml(p.notes) : ''
+        ].filter(Boolean).join(' · ')}</div>
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
@@ -680,11 +686,7 @@ async function refreshOwnerPayments() {
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
     </div>`);
 
-  const moreBtn = listEl.querySelector('[data-load-more]');
-  if (moreBtn) moreBtn.addEventListener('click', () => {
-    ownerPayShown += PAY_PAGE_SIZE;
-    refreshOwnerPayments();
-  });
+  wirePaymentList(listEl, 'ownerPaymentsList', refreshOwnerPayments);
 
   listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
@@ -711,8 +713,8 @@ async function refreshOwnerPayments() {
 // 47th?" — they ask "what did I pay in September?". So the list is grouped by
 // month, newest first, and only a page of rows is laid out until asked for more.
 const PAY_PAGE_SIZE = 20;
-let ownerPayShown = PAY_PAGE_SIZE;
-let tenantPayShown = PAY_PAGE_SIZE;
+const freshPayState = () => ({ upcoming: false, previous: false, history: PAY_PAGE_SIZE });
+const payShown = { ownerPaymentsList: freshPayState(), tenantPaymentsList: freshPayState() };
 
 // Rows arrive newest-first, so consecutive rows share a month and the groups
 // fall out of a single pass.
@@ -727,42 +729,112 @@ function paymentMonthGroups(payments) {
   return groups;
 }
 
-// The reader should land on the month they can act on. A lease with a year of
-// rent scheduled ahead would otherwise open on the furthest future month, with
-// anything overdue eleven groups down. Current month first, then back through
-// the history, and the scheduled months last — the dates label themselves, so
-// the three runs need no headings of their own.
-function orderPaymentGroups(groups) {
+// Three runs, each answering a different question: what is live now, what is
+// coming, what already happened. Rows arrive newest-first, so the past run is
+// already in order and the future only needs reversing.
+function splitPaymentGroups(groups) {
   const thisMonth = isoDate(new Date()).slice(0, 7);
-  return [
-    ...groups.filter(g => !g.key),                            // undated: owed, not planned
-    ...groups.filter(g => g.key === thisMonth),
-    ...groups.filter(g => g.key && g.key < thisMonth),        // already newest-first
-    ...groups.filter(g => g.key && g.key > thisMonth).reverse()   // soonest first
-  ];
+  return {
+    now: groups.filter(g => !g.key || g.key === thisMonth),   // undated: owed, not planned
+    previous: groups.filter(g => g.key && g.key < thisMonth),
+    upcoming: groups.filter(g => g.key && g.key > thisMonth).reverse()
+  };
 }
 
-function paymentListHtml(payments, shown, rowHtml) {
-  let left = Math.max(shown, 1);
-  const parts = [];
-  for (const g of orderPaymentGroups(paymentMonthGroups(payments))) {
-    if (left <= 0) break;
-    const rows = g.rows.slice(0, left);
-    left -= rows.length;
-    // The header counts the whole month, even when the page cuts it short.
-    parts.push(`<div class="group-head">
+// The header counts the whole month, even where a page cuts it short.
+function paymentGroupHtml(g, rowHtml, limit) {
+  const rows = limit === undefined ? g.rows : g.rows.slice(0, limit);
+  return `<div class="group-head">
       <span class="group-title">${g.key ? escapeHtml(fmtMonth(g.key + '-01')) : t('pay.noDueGroup')}</span>
       <span class="group-count">${g.rows.length === 1 ? t('pay.groupCountOne') : t('pay.groupCount', { count: g.rows.length })}</span>
-    </div>` + rows.map(rowHtml).join(''));
+    </div>` + rows.map(rowHtml).join('');
+}
+
+const countRows = (groups) => groups.reduce((n, g) => n + g.rows.length, 0);
+
+// A year of scheduled rent is twelve near-identical cards standing between the
+// reader and everything else. Show the live month and what comes right after
+// it; the rest of the schedule, and the history, each wait behind a line of
+// their own. The months label themselves, so the sections carry no headings.
+const PAY_PREVIEW_GROUPS = 2;
+
+function paymentSectionsHtml(containerId, payments, rowHtml) {
+  const state = payShown[containerId];
+  const { now, previous, upcoming } = splitPaymentGroups(paymentMonthGroups(payments));
+
+  // Two month groups up front: the current month and the next one, or the two
+  // nearest ahead when this month has nothing of its own. An undated group is
+  // not a month and must not eat into that budget.
+  const currentMonths = now.filter(g => g.key).length;
+  const preview = upcoming.slice(0, Math.max(PAY_PREVIEW_GROUPS - currentMonths, 0));
+  const rest = upcoming.slice(preview.length);
+  // With nothing live and nothing ahead, the history is all there is to show.
+  const openPrevious = state.previous || (now.length === 0 && upcoming.length === 0);
+
+  const parts = [...now, ...preview].map(g => paymentGroupHtml(g, rowHtml));
+
+  if (rest.length) {
+    parts.push(state.upcoming
+      ? rest.map(g => paymentGroupHtml(g, rowHtml)).join('')
+      : `<button type="button" class="btn-small section-toggle" data-open-section="upcoming">${t('pay.showUpcoming', { count: countRows(rest) })}</button>`);
   }
-  const rendered = Math.min(Math.max(shown, 1), payments.length);
-  if (rendered < payments.length) {
+
+  if (previous.length && !openPrevious) {
+    parts.push(`<button type="button" class="btn-small section-toggle" data-open-section="previous">${t('pay.showPrevious', { count: countRows(previous) })}</button>`);
+  } else if (previous.length) {
+    // History alone can run to hundreds of rows, so it keeps its own paging.
+    let left = state.history;
+    for (const g of previous) {
+      if (left <= 0) break;
+      parts.push(paymentGroupHtml(g, rowHtml, left));
+      left -= Math.min(g.rows.length, left);
+    }
+    const total = countRows(previous);
+    const rendered = Math.min(state.history, total);
+    if (rendered < total) {
+      parts.push(`<div class="list-more">
+        <span class="muted">${t('list.showingCount', { shown: rendered, total })}</span>
+        <button class="btn-small" data-load-more>${t('list.loadMore')}</button>
+      </div>`);
+    }
+  }
+
+  return parts.join('');
+}
+
+// A narrowed list is already the answer to a question, so it stays flat: the
+// sections would hide most of what the reader just asked to see.
+function paymentFlatHtml(containerId, payments, rowHtml) {
+  const shown = payShown[containerId].history;
+  let left = shown;
+  const parts = [];
+  for (const g of paymentMonthGroups(payments)) {
+    if (left <= 0) break;
+    parts.push(paymentGroupHtml(g, rowHtml, left));
+    left -= Math.min(g.rows.length, left);
+  }
+  if (shown < payments.length) {
     parts.push(`<div class="list-more">
-      <span class="muted">${t('list.showingCount', { shown: rendered, total: payments.length })}</span>
+      <span class="muted">${t('list.showingCount', { shown, total: payments.length })}</span>
       <button class="btn-small" data-load-more>${t('list.loadMore')}</button>
     </div>`);
   }
   return parts.join('');
+}
+
+// Wires the two section toggles and the history pager, whichever are present.
+function wirePaymentList(listEl, containerId, refresh) {
+  listEl.querySelectorAll('[data-open-section]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      payShown[containerId][btn.getAttribute('data-open-section')] = true;
+      refresh();
+    });
+  });
+  const more = listEl.querySelector('[data-load-more]');
+  if (more) more.addEventListener('click', () => {
+    payShown[containerId].history += PAY_PAGE_SIZE;
+    refresh();
+  });
 }
 
 // Postgres clamps "+ 1 month" to the end of the target month; match that here so
@@ -856,7 +928,7 @@ document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPay
       paymentsTenancyId = e.target.value;
       cancelPaymentEdit();  // the charge being edited belongs to the other tenancy
     }
-    ownerPayShown = PAY_PAGE_SIZE;   // a new filter or tenancy starts at the top again
+    payShown.ownerPaymentsList = freshPayState();   // a new filter or tenancy starts fresh
     await refreshOwnerPayments();
   });
 });
@@ -1576,21 +1648,23 @@ async function refreshTenantPayments() {
     return;
   }
 
-  listEl.innerHTML = paymentListHtml(payments, tenantPayShown, p => `
+  const narrowed = statusFilter !== 'all' || categoryFilter !== 'all';
+  const render = narrowed ? paymentFlatHtml : paymentSectionsHtml;
+  listEl.innerHTML = render('tenantPaymentsList', payments, p => `
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+        <div class="sub">${[
+          p.due_date ? t('pay.dueLabel') + ': ' + fmtDate(p.due_date) : '',
+          p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : '',
+          p.notes ? escapeHtml(p.notes) : ''
+        ].filter(Boolean).join(' · ')}</div>
       </div>
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
     </div>`);
 
-  const moreBtn = listEl.querySelector('[data-load-more]');
-  if (moreBtn) moreBtn.addEventListener('click', () => {
-    tenantPayShown += PAY_PAGE_SIZE;
-    refreshTenantPayments();
-  });
+  wirePaymentList(listEl, 'tenantPaymentsList', refreshTenantPayments);
 
   listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
@@ -1599,7 +1673,7 @@ async function refreshTenantPayments() {
 
 ['tenantStatusFilter', 'tenantCategoryFilter'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => {
-    tenantPayShown = PAY_PAGE_SIZE;   // a new filter starts at the top again
+    payShown.tenantPaymentsList = freshPayState();   // a new filter starts fresh
     refreshTenantPayments();
   });
 });

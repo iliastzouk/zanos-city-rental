@@ -162,6 +162,9 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .convo-collapsed{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
 [data-show-all]{margin-bottom:10px;}
 
+/* Full-width line standing between the runs of a payment list. */
+.section-toggle{width:100%; padding:10px; margin-top:2px;}
+
 .messages-list{display:flex; flex-direction:column; gap:8px; max-height:360px; overflow-y:auto; margin-bottom:14px; padding-right:4px;}
 .message-bubble{padding:9px 13px; border-radius:12px; max-width:75%; font-size:.9rem;}
 .message-bubble.mine{background:var(--accent); color:#fff; align-self:flex-end;}
