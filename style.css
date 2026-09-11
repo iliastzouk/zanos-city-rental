@@ -40,12 +40,17 @@ h2{font-size:1.1rem;}
 /* Never let a long address push the buttons off the edge. */
 #userEmail{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px;}
 
-/* On a phone the brand and the account controls each get their own line. */
+/* The account buttons are two short words each; never let them break mid-label. */
+.user-box .btn-link{white-space:nowrap;}
+
+/* On a phone the brand and the account controls each get their own line, and
+   the address takes a line of its own so the buttons keep their full width. */
 @media (max-width:640px){
   .topbar-inner{flex-direction:column; align-items:stretch; padding:10px 16px; gap:8px;}
   .topbar-actions{justify-content:space-between; gap:10px;}
   .brand{font-size:.95rem;}
-  #userEmail{max-width:none; flex:1 1 auto;}
+  .user-box{flex-wrap:wrap; justify-content:flex-end; row-gap:6px;}
+  #userEmail{max-width:none; flex:1 1 100%; text-align:right;}
 }
 .btn-lang{
   background:var(--bg-alt); border:1px solid var(--line); color:var(--text);

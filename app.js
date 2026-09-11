@@ -1411,7 +1411,8 @@ async function refreshTenantPayments() {
   // What is actually owed, before any filter narrows the list.
   const unpaid = rows.filter(p => p.status !== 'paid');
   const owed = unpaid.reduce((sum, p) => sum + Number(p.amount), 0);
-  const overdue = unpaid.filter(isOverdue).length;
+  const overdueRows = unpaid.filter(isOverdue);
+  const overdueOwed = overdueRows.reduce((sum, p) => sum + Number(p.amount), 0);
   const upcoming = unpaid
     .filter(p => p.due_date && !isOverdue(p))
     .map(p => p.due_date).sort()[0];
@@ -1420,7 +1421,7 @@ async function refreshTenantPayments() {
     ? `<span class="pill paid">${t('pay.allSettled')}</span>`
     : [
         `<span class="pill pending">${t('pay.outstanding', { amount: fmtMoney(owed) })}</span>`,
-        overdue ? `<span class="pill overdue">${t('pay.overdueCount', { count: overdue })}</span>` : '',
+        overdueRows.length ? `<span class="pill overdue">${t('pay.overdueCount', { count: overdueRows.length, amount: fmtMoney(overdueOwed) })}</span>` : '',
         upcoming ? `<span class="pill low">${t('pay.nextDue', { date: fmtDate(upcoming) })}</span>` : ''
       ].join('');
 
