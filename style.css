@@ -174,6 +174,19 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .check-row input[type=checkbox]{width:auto; margin:0;}
 .list-item code{background:var(--bg-alt); padding:2px 8px; border-radius:6px; letter-spacing:.08em;}
 
+/* Month headings inside a payment history, plus the row that pages it. */
+.group-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  margin-top:6px; padding-bottom:6px; border-bottom:1px solid var(--line);
+}
+.group-head:first-child{margin-top:0;}
+.group-title{font-weight:700; font-size:.88rem;}
+.group-count{font-size:.78rem; color:var(--text-soft); white-space:nowrap;}
+.list-more{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  flex-wrap:wrap; margin-top:4px;
+}
+
 /* Sits between the sign-in form and the magic-link fallback button. */
 .small-note{margin:18px 0 8px; font-size:.85rem;}
 .center-card + .center-card{margin-top:18px;}

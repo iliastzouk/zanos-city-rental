@@ -623,18 +623,24 @@ async function refreshOwnerPayments() {
     return;
   }
 
-  listEl.innerHTML = payments.map(p => `
+  listEl.innerHTML = paymentListHtml(payments, ownerPayShown, p => `
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+        <div class="sub">${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
       <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
-    </div>`).join('');
+    </div>`);
+
+  const moreBtn = listEl.querySelector('[data-load-more]');
+  if (moreBtn) moreBtn.addEventListener('click', () => {
+    ownerPayShown += PAY_PAGE_SIZE;
+    refreshOwnerPayments();
+  });
 
   listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
@@ -653,6 +659,51 @@ async function refreshOwnerPayments() {
       await refreshOwnerPayments();
     });
   });
+}
+
+// ---- Payment history: grouped by month, a page at a time -------------------
+// A tenancy that runs for years piles up hundreds of charges. Rendering the lot
+// on a phone is both slow and unreadable, and nobody asks "which charge is the
+// 47th?" — they ask "what did I pay in September?". So the list is grouped by
+// month, newest first, and only a page of rows is laid out until asked for more.
+const PAY_PAGE_SIZE = 20;
+let ownerPayShown = PAY_PAGE_SIZE;
+let tenantPayShown = PAY_PAGE_SIZE;
+
+// Rows arrive newest-first, so consecutive rows share a month and the groups
+// fall out of a single pass.
+function paymentMonthGroups(payments) {
+  const groups = [];
+  payments.forEach(p => {
+    const key = p.due_date ? p.due_date.slice(0, 7) : '';
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.rows.push(p);
+    else groups.push({ key, rows: [p] });
+  });
+  return groups;
+}
+
+function paymentListHtml(payments, shown, rowHtml) {
+  let left = Math.max(shown, 1);
+  const parts = [];
+  for (const g of paymentMonthGroups(payments)) {
+    if (left <= 0) break;
+    const rows = g.rows.slice(0, left);
+    left -= rows.length;
+    // The header counts the whole month, even when the page cuts it short.
+    parts.push(`<div class="group-head">
+      <span class="group-title">${g.key ? escapeHtml(fmtMonth(g.key + '-01')) : t('pay.noDueGroup')}</span>
+      <span class="group-count">${g.rows.length === 1 ? t('pay.groupCountOne') : t('pay.groupCount', { count: g.rows.length })}</span>
+    </div>` + rows.map(rowHtml).join(''));
+  }
+  const rendered = Math.min(Math.max(shown, 1), payments.length);
+  if (rendered < payments.length) {
+    parts.push(`<div class="list-more">
+      <span class="muted">${t('pay.showingCount', { shown: rendered, total: payments.length })}</span>
+      <button class="btn-small" data-load-more>${t('pay.loadMore')}</button>
+    </div>`);
+  }
+  return parts.join('');
 }
 
 // Postgres clamps "+ 1 month" to the end of the target month; match that here so
@@ -734,6 +785,7 @@ document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPay
       paymentsTenancyId = e.target.value;
       cancelPaymentEdit();  // the charge being edited belongs to the other tenancy
     }
+    ownerPayShown = PAY_PAGE_SIZE;   // a new filter or tenancy starts at the top again
     await refreshOwnerPayments();
   });
 });
@@ -1436,15 +1488,21 @@ async function refreshTenantPayments() {
     return;
   }
 
-  listEl.innerHTML = payments.map(p => `
+  listEl.innerHTML = paymentListHtml(payments, tenantPayShown, p => `
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+        <div class="sub">${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
-    </div>`).join('');
+    </div>`);
+
+  const moreBtn = listEl.querySelector('[data-load-more]');
+  if (moreBtn) moreBtn.addEventListener('click', () => {
+    tenantPayShown += PAY_PAGE_SIZE;
+    refreshTenantPayments();
+  });
 
   listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
@@ -1452,7 +1510,10 @@ async function refreshTenantPayments() {
 }
 
 ['tenantStatusFilter', 'tenantCategoryFilter'].forEach(id => {
-  document.getElementById(id).addEventListener('change', refreshTenantPayments);
+  document.getElementById(id).addEventListener('change', () => {
+    tenantPayShown = PAY_PAGE_SIZE;   // a new filter starts at the top again
+    refreshTenantPayments();
+  });
 });
 
 document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
