@@ -17,6 +17,7 @@ let currentProperty = null;
 let currentTenancy = null; // active tenancy (owner: latest active; tenant: their own)
 let editingTenancyId = null;
 let editingPaymentId = null;
+let editingPaymentDue = null;
 
 // ---------- View management ----------
 function showView(id) {
@@ -481,9 +482,29 @@ async function refreshOwnerPayments() {
   });
 }
 
+// Postgres clamps "+ 1 month" to the end of the target month; match that here so
+// a charge due on the 31st does not slide into the following month.
+function nextMonth(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const ny = m === 12 ? y + 1 : y;
+  const nm = m === 12 ? 1 : m + 1;
+  const day = Math.min(d, new Date(ny, nm, 0).getDate());
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${ny}-${pad(nm)}-${pad(day)}`;
+}
+
+function paymentSummary(payment) {
+  const parts = [`${categoryLabel(payment.category)} — ${fmtMoney(payment.amount)}`];
+  if (payment.due_date) parts.push(`${t('pay.dueLabel')} ${fmtDate(payment.due_date)}`);
+  if (payment.notes) parts.push(payment.notes);
+  return parts.join(' · ');
+}
+
 function startPaymentEdit(payment) {
   if (!payment) return;
   editingPaymentId = payment.id;
+  editingPaymentDue = payment.due_date || null;
+
   const catSelect = document.getElementById('paymentCategory');
   catSelect.value = payment.category;
   if (!catSelect.value) catSelect.value = 'other';  // unknown category, do not blank it
@@ -491,10 +512,14 @@ function startPaymentEdit(payment) {
   document.getElementById('paymentDue').value = payment.due_date || '';
   document.getElementById('paymentNotes').value = payment.notes || '';
   document.getElementById('paymentFile').value = '';
-  // Recurrence is decided once, when the series is created.
   document.getElementById('paymentRecurring').checked = false;
-  document.getElementById('paymentRecurring').disabled = true;
-  document.getElementById('paymentFileLabel').textContent = t('pay.replaceFile');
+
+  // Say which charge this is; "Editing a charge" on its own tells the reader nothing.
+  document.getElementById('paymentEditWhat').textContent =
+    t('pay.editingWhat', { what: paymentSummary(payment) });
+  document.getElementById('paymentFormTitle').textContent = t('pay.editTitle');
+  document.getElementById('paymentFileLabel').textContent =
+    payment.proof_path ? t('pay.replaceFile') : t('pay.attachFile');
   document.getElementById('paymentEditNote').hidden = false;
   document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.update');
   document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -502,8 +527,10 @@ function startPaymentEdit(payment) {
 
 function cancelPaymentEdit() {
   editingPaymentId = null;
+  editingPaymentDue = null;
   document.getElementById('paymentForm').reset();
-  document.getElementById('paymentRecurring').disabled = false;
+  document.getElementById('paymentFile').disabled = false;
+  document.getElementById('paymentFormTitle').textContent = t('pay.formTitle');
   document.getElementById('paymentFileLabel').textContent = t('pay.attachment');
   document.getElementById('paymentEditNote').hidden = true;
   document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.submit');
@@ -515,10 +542,13 @@ document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPay
 // An attachment makes no sense across a whole series, only on one charge.
 document.getElementById('paymentRecurring').addEventListener('change', (e) => {
   const file = document.getElementById('paymentFile');
-  file.disabled = e.target.checked;
-  if (e.target.checked) file.value = '';
+  // While editing, the attachment belongs to the charge being edited, so it
+  // stays available; only a brand-new series has no single charge to attach to.
+  const blocked = e.target.checked && !editingPaymentId;
+  file.disabled = blocked;
+  if (blocked) file.value = '';
   document.getElementById('paymentFileLabel').textContent =
-    e.target.checked ? t('pay.attachmentNote') : t('pay.attachment');
+    blocked ? t('pay.attachmentNote') : t('pay.attachment');
 });
 
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
@@ -535,7 +565,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
 
   if (file && file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
-  if (recurring) {
+  if (recurring && !editingPaymentId) {
     // Without a first date there is nothing to step monthly from.
     if (!due) { setMsg(msg, t('pay.needDueDate'), 'error'); return; }
     const { data: created, error } = await sb.rpc('rental_create_recurring_payments', {
@@ -570,6 +600,22 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       if (proofPath) await sb.storage.from('rental-documents').remove([proofPath]);
       reportFailure(editingPaymentId ? 'payments.update' : 'payments.add', error, msg);
       return;
+    }
+
+    // Ticking "repeat" while editing turns this charge into the first of a
+    // series: the charge itself is already saved, so generate the months after
+    // it rather than duplicating it.
+    if (recurring && editingPaymentId) {
+      if (!due) { setMsg(msg, t('pay.recurringNeedsDue'), 'error'); return; }
+      const { data: created, error: recErr } = await sb.rpc('rental_create_recurring_payments', {
+        p_tenancy_id: currentTenancy.id,
+        p_category: category,
+        p_amount: amount,
+        p_first_due: nextMonth(due),
+        p_notes: notes
+      });
+      if (recErr) { reportFailure('payments.recurringFromEdit', recErr, msg); return; }
+      alert(t('pay.recurringFromEdit', { count: created }));
     }
   }
 

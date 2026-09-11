@@ -85,6 +85,11 @@ const TRANSLATIONS = {
     'onb.guest.redeeming': 'Έλεγχος κωδικού...',
 
     'tab.guests': 'Επισκέπτες',
+    'pay.editTitle': 'Επεξεργασία χρέωσης',
+    'pay.editingWhat': 'Επεξεργάζεσαι: {what}',
+    'pay.attachFile': 'Λογαριασμός / απόδειξη (προαιρετικό)',
+    'pay.recurringFromEdit': 'Δημιουργήθηκαν {count} επιπλέον μηνιαίες εγγραφές, από τον επόμενο μήνα.',
+    'pay.recurringNeedsDue': 'Για επανάληψη χρειάζεται η χρέωση να έχει ημερομηνία.',
     'pay.attachment': 'Λογαριασμός / απόδειξη (προαιρετικό)',
     'pay.attachmentNote': 'Δεν επισυνάπτεται αρχείο σε επαναλαμβανόμενη σειρά.',
     'pay.openAttachment': 'Λογαριασμός',
@@ -357,6 +362,11 @@ const TRANSLATIONS = {
     'onb.guest.redeeming': 'Checking code...',
 
     'tab.guests': 'Guests',
+    'pay.editTitle': 'Edit charge',
+    'pay.editingWhat': 'Editing: {what}',
+    'pay.attachFile': 'Bill or receipt (optional)',
+    'pay.recurringFromEdit': 'Created {count} further monthly entries, starting next month.',
+    'pay.recurringNeedsDue': 'To repeat, the charge needs a date.',
     'pay.attachment': 'Bill or receipt (optional)',
     'pay.attachmentNote': 'A recurring series takes no attachment.',
     'pay.openAttachment': 'Bill',
