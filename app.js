@@ -273,62 +273,55 @@ async function loadOwnerDashboard() {
 }
 
 async function refreshTenancies() {
-  const { data: tenancies } = await sb.from('rental_tenancies')
+  const { data: tenancies, error } = await sb.from('rental_tenancies')
     .select('*').eq('property_id', currentProperty.id)
     .order('start_date', { ascending: false });
+  if (error) { reportFailure('tenancies.load', error); return; }
 
-  const active = (tenancies || []).find(t => t.status === 'active');
-  currentTenancy = active || null;
+  // The rest of the dashboard keys off the active tenancy.
+  currentTenancy = (tenancies || []).find(item => item.status === 'active') || null;
 
-  const infoEl = document.getElementById('currentTenancyInfo');
-  if (active) {
-    infoEl.innerHTML = `
-      <div class="list-item">
-        <div class="main">
-          <div class="title">${escapeHtml(active.tenant_name || t('tenancy.defaultTenant'))}</div>
-          <div class="sub">${fmtDate(active.start_date)} → ${active.end_date ? fmtDate(active.end_date) : t('dash')} ·
-            ${t('tenancy.rentLine', { amount: fmtMoney(active.monthly_rent) })}</div>
-        </div>
-        <button class="btn-small" data-edit-tenancy="${active.id}">${t('tenancy.edit')}</button>
-        <button class="btn-small danger" data-end-tenancy="${active.id}">${t('tenancy.endBtn')}</button>
-      </div>`;
-    infoEl.querySelector('[data-edit-tenancy]').addEventListener('click', () => startTenancyEdit(active));
-    infoEl.querySelector('[data-end-tenancy]').addEventListener('click', async (e) => {
-      if (!confirm(t('tenancy.endConfirm'))) return;
-      await sb.from('rental_tenancies').update({ status: 'ended' }).eq('id', e.target.getAttribute('data-end-tenancy'));
-      await refreshTenancies();
-    });
-  } else {
-    infoEl.innerHTML = `<span class="muted">${t('tenancy.none')}</span>`;
+  const el = document.getElementById('tenancyHistory');
+  if (!tenancies || tenancies.length === 0) {
+    el.innerHTML = `<span class="muted">${t('tenancy.historyEmpty')}</span>`;
+    return;
   }
 
-  const histEl = document.getElementById('tenancyHistory');
-  if (!tenancies || tenancies.length === 0) {
-    histEl.innerHTML = `<span class="muted">${t('tenancy.historyEmpty')}</span>`;
-  } else {
-    histEl.innerHTML = tenancies.map(item => `
+  // One list for every tenancy, active ones marked and carrying the extra
+  // action. Showing the current one twice, in its own card and again here,
+  // only raised the question of which copy was authoritative.
+  el.innerHTML = tenancies.map(item => {
+    const isActive = item.status === 'active';
+    return `
       <div class="list-item">
         <div class="main">
           <div class="title">${escapeHtml(item.tenant_name || t('tenancy.defaultTenant'))}</div>
           <div class="sub">${fmtDate(item.start_date)} → ${item.end_date ? fmtDate(item.end_date) : t('dash')} · ${t('tenancy.rentLine', { amount: fmtMoney(item.monthly_rent) })}</div>
         </div>
-        <span class="pill ${item.status === 'active' ? 'paid' : 'pending'}">${item.status === 'active' ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
+        <span class="pill ${isActive ? 'paid' : 'pending'}">${isActive ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
         <button class="btn-small" data-edit-row="${item.id}">${t('tenancy.edit')}</button>
+        ${isActive ? `<button class="btn-small" data-end-row="${item.id}">${t('tenancy.endBtn')}</button>` : ''}
         <button class="btn-small danger" data-delete-row="${item.id}">${t('tenancy.delete')}</button>
-      </div>`).join('');
+      </div>`;
+  }).join('');
 
-    // Any tenancy can be edited or removed, not only the active one.
-    histEl.querySelectorAll('[data-edit-row]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        startTenancyEdit(tenancies.find(x => x.id === btn.getAttribute('data-edit-row')));
-      });
+  const find = (id) => tenancies.find(x => x.id === id);
+
+  el.querySelectorAll('[data-edit-row]').forEach(btn => {
+    btn.addEventListener('click', () => startTenancyEdit(find(btn.getAttribute('data-edit-row'))));
+  });
+  el.querySelectorAll('[data-delete-row]').forEach(btn => {
+    btn.addEventListener('click', () => deleteTenancy(find(btn.getAttribute('data-delete-row'))));
+  });
+  el.querySelectorAll('[data-end-row]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(t('tenancy.endConfirm'))) return;
+      const { error: endErr } = await sb.from('rental_tenancies')
+        .update({ status: 'ended' }).eq('id', btn.getAttribute('data-end-row'));
+      if (endErr) { reportFailure('tenancy.end', endErr); return; }
+      await loadOwnerDashboard();
     });
-    histEl.querySelectorAll('[data-delete-row]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        deleteTenancy(tenancies.find(x => x.id === btn.getAttribute('data-delete-row')));
-      });
-    });
-  }
+  });
 }
 
 // Everything hanging off a tenancy is ON DELETE CASCADE, so removing one takes

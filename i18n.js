@@ -199,9 +199,6 @@ const TRANSLATIONS = {
     'tab.payments': 'Πληρωμές',
     'tab.maintenance': 'Βλάβες',
     'tab.messages': 'Μηνύματα',
-
-    'tenancy.currentTitle': 'Τρέχουσα μίσθωση',
-    'tenancy.none': 'Δεν υπάρχει ενεργή μίσθωση αυτή τη στιγμή.',
     'tenancy.formTitle': 'Νέα / Επεξεργασία μίσθωσης',
     'tenancy.tenantName': 'Όνομα ενοικιαστή',
     'tenancy.tenantNamePlaceholder': 'π.χ. Γιάννης Παπαδόπουλος',
@@ -480,9 +477,6 @@ const TRANSLATIONS = {
     'tab.payments': 'Payments',
     'tab.maintenance': 'Maintenance',
     'tab.messages': 'Messages',
-
-    'tenancy.currentTitle': 'Current tenancy',
-    'tenancy.none': 'No active tenancy at the moment.',
     'tenancy.formTitle': 'New / edit tenancy',
     'tenancy.tenantName': 'Tenant name',
     'tenancy.tenantNamePlaceholder': 'e.g. John Smith',
