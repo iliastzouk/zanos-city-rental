@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911k">
+<link rel="stylesheet" href="style.css?v=20260911l">
 </head>
 <body>
 
@@ -340,8 +340,13 @@
       <div class="card">
         <h2 data-i18n="doc.formTitle">Ανέβασμα εγγράφου</h2>
         <form id="ownerDocForm">
+          <label data-i18n="doc.scope">Ανήκει σε</label>
+          <select id="ownerDocScope">
+            <option value="property" data-i18n="doc.scopeProperty">Το ακίνητο — μένει για πάντα</option>
+            <option value="tenancy" data-i18n="doc.scopeTenancy">Τη μίσθωση — φεύγει μαζί της</option>
+          </select>
           <label data-i18n="doc.title">Τίτλος</label>
-          <input type="text" id="ownerDocTitle" data-i18n-placeholder="doc.titlePlaceholder" placeholder="π.χ. Λογαριασμός ΑΗΚ" required>
+          <input type="text" id="ownerDocTitle" data-i18n-placeholder="doc.titlePlaceholder" placeholder="π.χ. Οδηγίες πλυντηρίου" required>
           <label data-i18n="doc.category">Κατηγορία</label>
           <select id="ownerDocCategory">
                 <option value="electricity" data-i18n="doccat.electricity">Ρεύμα</option>
@@ -359,7 +364,13 @@
         <p id="ownerDocMsg" class="msg" hidden></p>
       </div>
       <div class="card">
-        <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <h2 data-i18n="doc.propertyTitle">Έγγραφα ακινήτου</h2>
+        <p class="muted" data-i18n="doc.propertyHint">Οδηγίες συσκευών, κανονισμός, κάτοψη.</p>
+        <div id="ownerPropDocList" class="list"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="doc.tenancyTitle">Έγγραφα μίσθωσης</h2>
+        <p class="muted" data-i18n="doc.tenancyHint">Συμβόλαιο, πρωτόκολλο παράδοσης.</p>
         <p id="docsForWho" class="muted"></p>
         <label data-i18n="pay.forTenancy">Μίσθωση</label>
         <select id="docsTenancy"></select>
@@ -514,7 +525,12 @@
 
     <div class="tab-panel" data-panel="t-documents" hidden>
       <div class="card">
-        <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
+        <h2 data-i18n="doc.propertyTitle">Έγγραφα ακινήτου</h2>
+        <p class="muted" data-i18n="doc.propertyHint">Οδηγίες συσκευών, κανονισμός, κάτοψη.</p>
+        <div id="tenantPropDocList" class="list"></div>
+      </div>
+      <div class="card">
+        <h2 data-i18n="doc.tenancyTitle">Έγγραφα μίσθωσης</h2>
         <p class="muted" data-i18n="doc.readOnlyHint">Τα έγγραφα τα ανεβάζει ο ιδιοκτήτης.</p>
         <div id="tenantDocList" class="list"></div>
       </div>
@@ -531,7 +547,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911k"></script>
-<script src="app.js?v=20260911k"></script>
+<script src="i18n.js?v=20260911l"></script>
+<script src="app.js?v=20260911l"></script>
 </body>
 </html>

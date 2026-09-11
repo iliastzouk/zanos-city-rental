@@ -1156,27 +1156,14 @@ async function renderCalendar(prefix) {
 
 function docCategoryLabel(v) { return enumLabel('doccat', v); }
 
-function documentsTenancyId() {
-  return docsTenancyId;
-}
-
-async function refreshDocuments(prefix) {
-  const canManage = prefix === 'owner';
-  const el = document.getElementById(prefix + 'DocList');
-  const tenancy = canManage
-    ? fillTenancySelect('docsTenancy', docsTenancyId, 'docsForWho', 'doc.showing')
-    : currentTenancy;
-  if (!tenancy) {
-    el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
-    return;
-  }
+// Property documents outlive tenancies; tenancy documents die with them.
+async function renderDocumentList(el, filter, canManage, emptyText) {
   const { data: docs, error } = await sb.from('rental_documents')
-    .select('*').eq('tenancy_id', tenancy.id)
-    .order('created_at', { ascending: false });
+    .select('*').match(filter).order('created_at', { ascending: false });
   if (error) { reportFailure('documents.load', error); return; }
 
   el.innerHTML = (!docs || docs.length === 0)
-    ? `<span class="muted">${t('doc.empty')}</span>`
+    ? `<span class="muted">${emptyText}</span>`
     : docs.map(d => `
       <div class="list-item">
         <div class="main">
@@ -1200,27 +1187,54 @@ async function refreshDocuments(prefix) {
       const { error: delErr } = await sb.from('rental_documents')
         .delete().eq('id', btn.getAttribute('data-del-doc'));
       if (delErr) { reportFailure('documents.removeRow', delErr); return; }
-      await refreshDocuments(prefix);
+      await refreshDocuments(canManage ? 'owner' : 'tenant');
     });
   });
+}
+
+async function refreshDocuments(prefix) {
+  const canManage = prefix === 'owner';
+
+  await renderDocumentList(
+    document.getElementById(prefix + 'PropDocList'),
+    { property_id: currentProperty.id }, canManage, t('doc.propertyEmpty'));
+
+  const tenancy = canManage
+    ? fillTenancySelect('docsTenancy', docsTenancyId, 'docsForWho', 'doc.showing')
+    : currentTenancy;
+  const el = document.getElementById(prefix + 'DocList');
+  if (!tenancy) {
+    el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
+    return;
+  }
+  await renderDocumentList(el, { tenancy_id: tenancy.id }, canManage, t('doc.empty'));
 }
 
 function wireDocumentUpload(prefix) {
   document.getElementById(prefix + 'DocForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const msg = document.getElementById(prefix + 'DocMsg');
-    if (!docsTenancyId) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
+    const scope = document.getElementById(prefix + 'DocScope').value;
+    if (scope === 'tenancy' && !docsTenancyId) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
 
     const file = document.getElementById(prefix + 'DocFile').files[0];
     if (!file) return;
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
     setMsg(msg, t('doc.uploading'), '');
-    const { path, error: upErr } = await uploadTenancyFile(file, 'documents', docsTenancyId);
+    // Property files sit under property/<id>/ so the storage policies can tell
+    // the two kinds apart by path.
+    const ext = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+    const path = scope === 'property'
+      ? `property/${currentProperty.id}/${crypto.randomUUID()}${ext}`
+      : `${docsTenancyId}/documents/${crypto.randomUUID()}${ext}`;
+
+    const { error: upErr } = await sb.storage.from('rental-documents').upload(path, file);
     if (upErr) { reportFailure('documents.upload', upErr, msg); return; }
 
     const { error: rowErr } = await sb.from('rental_documents').insert({
-      tenancy_id: docsTenancyId,
+      tenancy_id: scope === 'tenancy' ? docsTenancyId : null,
+      property_id: scope === 'property' ? currentProperty.id : null,
       title: document.getElementById(prefix + 'DocTitle').value.trim(),
       category: document.getElementById(prefix + 'DocCategory').value,
       storage_path: path,
