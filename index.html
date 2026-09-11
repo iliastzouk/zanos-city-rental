@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911h">
+<link rel="stylesheet" href="style.css?v=20260911i">
 </head>
 <body>
 
@@ -275,6 +275,33 @@
     <div class="tab-panel" data-panel="maintenance" hidden>
       <div class="card">
         <h2 data-i18n="maint.ownerTitle">Αναφορές βλαβών</h2>
+        <p id="maintForWho" class="muted"></p>
+        <div class="form-row">
+          <div>
+            <label data-i18n="pay.forTenancy">Μίσθωση</label>
+            <select id="maintTenancy"></select>
+          </div>
+          <div>
+            <label data-i18n="maint.filterStatus">Κατάσταση</label>
+            <select id="maintStatusFilter">
+              <option value="all" data-i18n="pay.filterAll">Όλες</option>
+              <option value="open" data-i18n="st.open">Ανοιχτό</option>
+              <option value="in_progress" data-i18n="st.in_progress">Σε εξέλιξη</option>
+              <option value="resolved" data-i18n="st.resolved">Επιλύθηκε</option>
+              <option value="closed" data-i18n="st.closed">Έκλεισε</option>
+            </select>
+          </div>
+          <div>
+            <label data-i18n="maint.filterPriority">Προτεραιότητα</label>
+            <select id="maintPriorityFilter">
+              <option value="all" data-i18n="pay.filterAll">Όλες</option>
+              <option value="urgent" data-i18n="pri.urgent">Επείγον</option>
+              <option value="high" data-i18n="pri.high">Υψηλή</option>
+              <option value="medium" data-i18n="pri.medium">Μεσαία</option>
+              <option value="low" data-i18n="pri.low">Χαμηλή</option>
+            </select>
+          </div>
+        </div>
         <div id="ownerMaintenanceList" class="list"></div>
       </div>
     </div>
@@ -419,8 +446,11 @@
             <option value="high" data-i18n="pri.high">Υψηλή</option>
             <option value="urgent" data-i18n="pri.urgent">Επείγον</option>
           </select>
+          <label data-i18n="maint.photos">Φωτογραφίες (προαιρετικό)</label>
+          <input type="file" id="maintPhotos" accept="image/*" multiple>
           <button type="submit" class="btn-primary" data-i18n="maint.submit">Αποστολή αναφοράς</button>
         </form>
+        <p id="maintMsg" class="msg" hidden></p>
       </div>
       <div class="card">
         <h2 data-i18n="maint.myTitle">Οι αναφορές μου</h2>
@@ -459,7 +489,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911h"></script>
-<script src="app.js?v=20260911h"></script>
+<script src="i18n.js?v=20260911i"></script>
+<script src="app.js?v=20260911i"></script>
 </body>
 </html>

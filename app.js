@@ -20,6 +20,8 @@ let editingPaymentId = null;
 let editingPaymentDue = null;
 let allTenancies = [];        // every tenancy of the property, newest first
 let paymentsTenancyId = null; // which one the Payments tab is showing
+let maintTenancyId = null;    // and which one the Maintenance tab is showing
+const MAX_PHOTOS = 5;
 
 // ---------- View management ----------
 function showView(id) {
@@ -286,9 +288,9 @@ async function refreshTenancies() {
 
   // Default the Payments tab to the active tenancy, but keep any explicit
   // choice that still exists.
-  if (!allTenancies.some(item => item.id === paymentsTenancyId)) {
-    paymentsTenancyId = currentTenancy ? currentTenancy.id : (allTenancies[0] || {}).id || null;
-  }
+  const fallback = currentTenancy ? currentTenancy.id : (allTenancies[0] || {}).id || null;
+  if (!allTenancies.some(item => item.id === paymentsTenancyId)) paymentsTenancyId = fallback;
+  if (!allTenancies.some(item => item.id === maintTenancyId)) maintTenancyId = fallback;
 
   const el = document.getElementById('tenancyHistory');
   if (!tenancies || tenancies.length === 0) {
@@ -749,8 +751,25 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
 });
 
 async function refreshOwnerMaintenance() {
+  const select = document.getElementById('maintTenancy');
+  select.innerHTML = allTenancies.map(item =>
+    `<option value="${item.id}"${item.id === maintTenancyId ? ' selected' : ''}>${
+      escapeHtml(tenancyLabel(item))}${item.status === 'active' ? ' ✓' : ''}</option>`).join('');
+
+  const tenancy = allTenancies.find(item => item.id === maintTenancyId) || null;
+  document.getElementById('maintForWho').textContent = tenancy
+    ? t('maint.showing', { name: tenancy.tenant_name || t('tenancy.defaultTenant') })
+    : '';
+
   await renderMaintenanceList('ownerMaintenanceList', true);
 }
+
+['maintTenancy', 'maintStatusFilter', 'maintPriorityFilter'].forEach(id => {
+  document.getElementById(id).addEventListener('change', async (e) => {
+    if (id === 'maintTenancy') maintTenancyId = e.target.value;
+    await refreshOwnerMaintenance();
+  });
+});
 
 async function refreshOwnerMessages() {
   if (!currentTenancy) {
@@ -1105,9 +1124,32 @@ document.getElementById('maintenanceForm').addEventListener('submit', async (e) 
     priority: document.getElementById('maintPriority').value,
     created_by: currentUser.id
   };
-  const { error } = await sb.from('rental_maintenance_requests').insert(payload);
-  if (error) { alert(t('error', { msg: error.message })); return; }
+  const files = Array.from(document.getElementById('maintPhotos').files || []);
+  const msg = document.getElementById('maintMsg');
+  if (files.length > MAX_PHOTOS) { setMsg(msg, t('maint.photosTooMany'), 'error'); return; }
+  if (files.some(f => f.size > MAX_UPLOAD_BYTES)) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
+
+  const { data: created, error } = await sb.from('rental_maintenance_requests')
+    .insert(payload).select().single();
+  if (error) { reportFailure('maintenance.add', error, msg); return; }
+
+  if (files.length) {
+    setMsg(msg, t('maint.uploadingPhotos'), '');
+    for (const file of files) {
+      const { path, error: upErr } = await uploadTenancyFile(file, 'maintenance', currentTenancy.id);
+      if (upErr) { reportFailure('maintenance.photoUpload', upErr, msg); return; }
+      const { error: rowErr } = await sb.from('rental_maintenance_photos')
+        .insert({ request_id: created.id, storage_path: path, uploaded_by: currentUser.id });
+      if (rowErr) {
+        await sb.storage.from('rental-documents').remove([path]);
+        reportFailure('maintenance.photoRow', rowErr, msg);
+        return;
+      }
+    }
+  }
+
   e.target.reset();
+  setMsg(msg, '', '');
   await refreshTenantMaintenance();
 });
 
@@ -1138,17 +1180,31 @@ document.getElementById('tenantMessageForm').addEventListener('submit', async (e
 
 async function renderMaintenanceList(containerId, isOwner) {
   const el = document.getElementById(containerId);
-  let query = sb.from('rental_maintenance_requests').select('*').order('created_at', { ascending: false });
-  if (!isOwner) {
-    if (!currentTenancy) { el.innerHTML = `<span class="muted">${t('need.noActiveTenancy')}</span>`; return; }
-    query = query.eq('tenancy_id', currentTenancy.id);
-  } else {
-    if (!currentTenancy) { el.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`; return; }
-    query = query.eq('tenancy_id', currentTenancy.id);
+
+  // The owner picks a tenancy; the tenant only ever has their own.
+  const tenancyId = isOwner ? maintTenancyId : (currentTenancy || {}).id;
+  if (!tenancyId) {
+    el.innerHTML = `<span class="muted">${isOwner ? t('need.tenancyFirst') : t('need.noActiveTenancy')}</span>`;
+    return;
   }
-  const { data: requests } = await query;
-  if (!requests || requests.length === 0) {
+
+  const { data: all, error } = await sb.from('rental_maintenance_requests')
+    .select('*').eq('tenancy_id', tenancyId).order('created_at', { ascending: false });
+  if (error) { reportFailure('maintenance.load', error); return; }
+
+  if (!all || all.length === 0) {
     el.innerHTML = `<span class="muted">${t('maint.empty')}</span>`;
+    return;
+  }
+
+  const statusFilter = isOwner ? document.getElementById('maintStatusFilter').value : 'all';
+  const priorityFilter = isOwner ? document.getElementById('maintPriorityFilter').value : 'all';
+  const requests = all.filter(r =>
+    (statusFilter === 'all' || r.status === statusFilter) &&
+    (priorityFilter === 'all' || r.priority === priorityFilter));
+
+  if (requests.length === 0) {
+    el.innerHTML = `<span class="muted">${t('maint.noneForFilter')}</span>`;
     return;
   }
 
@@ -1157,7 +1213,7 @@ async function renderMaintenanceList(containerId, isOwner) {
       <div class="head">
         <div>
           <div class="title">${escapeHtml(r.title)}</div>
-          <div class="sub">${fmtDate(r.created_at)}</div>
+          <div class="sub">${fmtDate(r.created_at)}${r.resolved_at ? ' · ' + t('maint.resolvedOn', { date: fmtDate(r.resolved_at) }) : ''}</div>
         </div>
         <div>
           <span class="pill ${r.priority}">${priorityLabel(r.priority)}</span>
@@ -1165,11 +1221,13 @@ async function renderMaintenanceList(containerId, isOwner) {
         </div>
       </div>
       ${r.description ? `<div class="desc">${escapeHtml(r.description)}</div>` : ''}
+      <div class="photo-strip" data-photos></div>
       ${isOwner ? `
         <div class="status-actions">
           ${['open', 'in_progress', 'resolved', 'closed'].map(s => `
             <button class="btn-small" data-set-status="${s}" ${r.status === s ? 'disabled' : ''}>${statusLabel(s)}</button>
           `).join('')}
+          <button class="btn-small danger" data-delete-request="${escapeHtml(r.title)}">${t('maint.deleteReport')}</button>
         </div>` : ''}
       <div class="comments" data-comments></div>
       <form class="comment-form" data-comment-form>
@@ -1182,6 +1240,22 @@ async function renderMaintenanceList(containerId, isOwner) {
   el.querySelectorAll('[data-request-id]').forEach(card => {
     const requestId = card.getAttribute('data-request-id');
     loadComments(card, requestId);
+    loadPhotos(card, requestId);
+
+    const delBtn = card.querySelector('[data-delete-request]');
+    if (delBtn) {
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(t('maint.deleteConfirm', { title: delBtn.getAttribute('data-delete-request') }))) return;
+        // Comments and photo rows cascade, but the image files do not.
+        const { data: photos } = await sb.from('rental_maintenance_photos')
+          .select('storage_path').eq('request_id', requestId);
+        const paths = (photos || []).map(ph => ph.storage_path).filter(Boolean);
+        if (paths.length) await sb.storage.from('rental-documents').remove(paths);
+        const { error: delErr } = await sb.from('rental_maintenance_requests').delete().eq('id', requestId);
+        if (delErr) { reportFailure('maintenance.delete', delErr); return; }
+        await renderMaintenanceList(containerId, isOwner);
+      });
+    }
 
     card.querySelectorAll('[data-set-status]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1203,6 +1277,21 @@ async function renderMaintenanceList(containerId, isOwner) {
       loadComments(card, requestId);
     });
   });
+}
+
+// The bucket is private, so thumbnails need signed URLs of their own.
+async function loadPhotos(card, requestId) {
+  const el = card.querySelector('[data-photos]');
+  const { data: photos } = await sb.from('rental_maintenance_photos')
+    .select('*').eq('request_id', requestId).order('created_at');
+  if (!photos || photos.length === 0) { el.innerHTML = ''; return; }
+
+  const { data: signed } = await sb.storage.from('rental-documents')
+    .createSignedUrls(photos.map(p => p.storage_path), 300);
+  el.innerHTML = (signed || [])
+    .filter(item => item.signedUrl)
+    .map(item => `<a href="${item.signedUrl}" target="_blank" rel="noopener">
+        <img src="${item.signedUrl}" alt="" loading="lazy"></a>`).join('');
 }
 
 async function loadComments(card, requestId) {

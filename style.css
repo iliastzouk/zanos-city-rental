@@ -188,3 +188,10 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
   font-size:.72rem; background:var(--bg-alt); padding:8px; border-radius:8px;
   margin:6px 0 0; overflow-x:auto; max-height:220px;
 }
+
+/* Thumbnails of whatever the tenant photographed. */
+.photo-strip{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.photo-strip img{
+  width:84px; height:84px; object-fit:cover; border-radius:8px;
+  border:1px solid var(--line); display:block;
+}
