@@ -167,6 +167,16 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .message-bubble.mine{background:var(--accent); color:#fff; align-self:flex-end;}
 .message-bubble.theirs{background:var(--bg-alt); align-self:flex-start;}
 .message-bubble .sender{font-size:.72rem; font-weight:700; opacity:.85; margin-bottom:2px;}
+[data-load-earlier]{align-self:center; margin-bottom:6px;}
+
+/* Unread count on a tab. It rides on a data attribute because the language
+   switch rewrites each button's text, which would wipe a child element. */
+.tab-btn[data-badge]::after{
+  content:attr(data-badge); margin-left:6px; padding:1px 6px;
+  background:var(--danger); color:#fff; border-radius:999px;
+  font-size:.68rem; font-weight:700; letter-spacing:0;
+}
+.tab-btn.active[data-badge]::after{background:#fff; color:var(--accent-dark);}
 .message-bubble .meta{font-size:.7rem; opacity:.7; margin-top:3px;}
 .message-form{display:flex; gap:8px;}
 .message-form input{flex:1;}

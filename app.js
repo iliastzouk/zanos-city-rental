@@ -53,6 +53,23 @@ function fmtMoney(n) {
 function fmtDateTime(d) {
   return new Date(d).toLocaleString(dateLocale());
 }
+// Seconds carry no meaning in a conversation, and a bare date reads worse than
+// "Yesterday" for anything recent. The audit log keeps the full stamp.
+function fmtChatTime(d) {
+  const when = new Date(d);
+  const loc = dateLocale();
+  // el-GR resolves '2-digit' hours to a 12-hour clock; both languages read the
+  // rest of this app on a 24-hour one.
+  const time = when.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', hour12: false });
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const thatDay = new Date(when); thatDay.setHours(0, 0, 0, 0);
+  const daysAgo = Math.round((midnight - thatDay) / 86400000);
+  if (daysAgo === 0) return `${t('time.today')} · ${time}`;
+  if (daysAgo === 1) return `${t('time.yesterday')} · ${time}`;
+  const opts = { day: 'numeric', month: 'short' };
+  if (when.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return `${when.toLocaleDateString(loc, opts)} · ${time}`;
+}
 // 'YYYY-MM-DD' parsed as local, not UTC, so a day never shifts.
 function parseDate(s) {
   const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
@@ -92,6 +109,15 @@ function initTabs(scopeSelector) {
       scope.querySelectorAll('.tab-panel').forEach(p => {
         p.hidden = p.getAttribute('data-panel') !== tab;
       });
+      // A hidden element has no scroll height, so a thread rendered while its
+      // panel was closed can only be pinned to its newest message now.
+      scope.querySelectorAll(`.tab-panel[data-panel="${tab}"] .messages-list`).forEach(list => {
+        list.scrollTop = list.scrollHeight;
+        if (list.dataset.tenancy && list.dataset.newest) {
+          markMessagesSeen(list.dataset.tenancy, list.dataset.newest);
+        }
+      });
+      delete btn.dataset.badge;
     });
   });
 }
@@ -1809,7 +1835,7 @@ async function loadComments(card, requestId) {
     + visible.map(c => `
     <div class="comment">
       <span class="author">${c.author_id === currentUser.id ? t('party.you') : otherPartyLabel()}</span>
-      <span class="comment-time">${fmtDateTime(c.created_at)}</span>
+      <span class="comment-time">${fmtChatTime(c.created_at)}</span>
       <div class="comment-body">${escapeHtml(c.body)}</div>
     </div>`).join('');
 
@@ -1824,24 +1850,86 @@ async function loadComments(card, requestId) {
 // Shared: Messages thread
 // ============================================================
 
-async function renderMessages(containerId, tenancyId) {
+// A thread grows without limit, so only the tail is laid out; a chat reads
+// from the bottom up, which is why this pages backwards rather than forwards.
+const MSG_PAGE_SIZE = 30;
+const msgShown = { ownerMessagesList: MSG_PAGE_SIZE, tenantMessagesList: MSG_PAGE_SIZE };
+const MSG_TAB = {
+  ownerMessagesList: '#view-owner .tab-btn[data-tab="messages"]',
+  tenantMessagesList: '#view-tenant .tab-btn[data-tab="t-messages"]'
+};
+
+// What this device has already shown the reader. Kept locally: an unread mark
+// is a property of the device, not of the tenancy, and needs no schema.
+function seenKey(tenancyId) { return 'zanos_msgseen_' + tenancyId; }
+function lastSeen(tenancyId) {
+  try { return localStorage.getItem(seenKey(tenancyId)) || ''; } catch (e) { return ''; }
+}
+function markMessagesSeen(tenancyId, isoTime) {
+  try { localStorage.setItem(seenKey(tenancyId), isoTime); } catch (e) { /* private window */ }
+}
+
+// The count rides on a data attribute, not on the button's text, which the
+// language switch rewrites wholesale.
+function setTabBadge(selector, count) {
+  const btn = document.querySelector(selector);
+  if (!btn) return;
+  if (count > 0) btn.dataset.badge = count > 9 ? '9+' : String(count);
+  else delete btn.dataset.badge;
+}
+
+async function renderMessages(containerId, tenancyId, keepPosition) {
   const el = document.getElementById(containerId);
   const { data: messages } = await sb.from('rental_messages')
     .select('*').eq('tenancy_id', tenancyId).order('created_at', { ascending: true });
   if (!messages || messages.length === 0) {
     el.innerHTML = `<span class="muted">${t('msg.empty')}</span>`;
+    setTabBadge(MSG_TAB[containerId], 0);
     return;
   }
-  el.innerHTML = messages.map(m => {
-    const mine = m.author_id === currentUser.id;
-    return `
+
+  const newest = messages[messages.length - 1].created_at;
+  el.dataset.tenancy = tenancyId;
+  el.dataset.newest = newest;
+
+  // Only the other side's messages can be unread, and only those this device
+  // has not already had on screen.
+  if (el.offsetParent !== null) {          // the tab is open; they are reading it
+    markMessagesSeen(tenancyId, newest);
+    setTabBadge(MSG_TAB[containerId], 0);
+  } else {
+    const seen = lastSeen(tenancyId);
+    setTabBadge(MSG_TAB[containerId],
+      messages.filter(m => m.author_id !== currentUser.id && m.created_at > seen).length);
+  }
+
+  const shown = Math.max(msgShown[containerId] || MSG_PAGE_SIZE, 1);
+  const visible = messages.slice(-shown);
+  const wasHeight = el.scrollHeight;
+  const wasTop = el.scrollTop;
+
+  el.innerHTML =
+    (visible.length < messages.length
+      ? `<button type="button" class="btn-small" data-load-earlier>${t('msg.loadEarlier')}</button>`
+      : '')
+    + visible.map(m => {
+      const mine = m.author_id === currentUser.id;
+      return `
     <div class="message-bubble ${mine ? 'mine' : 'theirs'}">
       <div class="sender">${mine ? t('party.you') : otherPartyLabel()}</div>
       ${escapeHtml(m.body)}
-      <div class="meta">${fmtDateTime(m.created_at)}</div>
+      <div class="meta">${fmtChatTime(m.created_at)}</div>
     </div>`;
-  }).join('');
-  el.scrollTop = el.scrollHeight;
+    }).join('');
+
+  const earlier = el.querySelector('[data-load-earlier]');
+  if (earlier) earlier.addEventListener('click', () => {
+    msgShown[containerId] = shown + MSG_PAGE_SIZE;
+    renderMessages(containerId, tenancyId, true);
+  });
+
+  // Reading back through the history should not throw the reader to the end.
+  el.scrollTop = keepPosition ? el.scrollHeight - wasHeight + wasTop : el.scrollHeight;
 }
 
 // ============================================================
