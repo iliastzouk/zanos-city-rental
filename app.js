@@ -118,8 +118,26 @@ function initTabs(scopeSelector) {
         }
       });
       delete btn.dataset.badge;
+      requestAnimationFrame(() => revealTabs(scope));
     });
   });
+}
+
+// Switching tabs from halfway down a long panel used to leave the reader in the
+// middle of the new one, with the tab row itself scrolled up behind the sticky
+// topbar — no way to see which tab was now active without scrolling back. Bring
+// the row back into view, clearing the height of the bar that would cover it.
+// Measured after the panel swap has been laid out: hiding a tall panel can
+// shrink the page and move everything under the reader's feet first.
+function revealTabs(scope) {
+  const tabs = scope.querySelector('.tabs');
+  const bar = document.querySelector('.topbar');
+  if (!tabs || !bar) return;
+  const barBottom = bar.getBoundingClientRect().bottom;
+  if (tabs.getBoundingClientRect().top >= barBottom) return;   // already in view
+  const target = tabs.getBoundingClientRect().top + window.scrollY - bar.offsetHeight - 8;
+  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: Math.max(target, 0), behavior: smooth ? 'smooth' : 'auto' });
 }
 
 // ---------- Auth ----------
