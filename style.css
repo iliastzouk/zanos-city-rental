@@ -195,3 +195,29 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
   width:84px; height:84px; object-fit:cover; border-radius:8px;
   border:1px solid var(--line); display:block;
 }
+
+/* ---- Calendar ---- */
+.cal-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+.cal-head h2{margin:0; font-size:1.05rem; text-align:center; flex:1;}
+#ownerCalToday, #tenantCalToday{margin:10px 0 14px;}
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
+.cal-wd{
+  text-align:center; font-size:.68rem; font-weight:700; color:var(--text-soft);
+  padding:4px 0; text-transform:uppercase;
+}
+.cal-cell{
+  aspect-ratio:1; border:1px solid var(--line); border-radius:8px; background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  font-family:inherit; font-size:.85rem; color:var(--text); cursor:pointer; padding:0;
+}
+.cal-cell.empty{border:none; background:none; cursor:default;}
+.cal-cell.today{border-color:var(--accent); font-weight:700;}
+.cal-cell.selected{background:var(--accent); color:#fff; border-color:var(--accent);}
+.cal-cell .dots{display:flex; gap:2px; min-height:6px;}
+.dot{width:6px; height:6px; border-radius:50%; display:inline-block;}
+.dot.due{background:var(--warn);}
+.dot.paid{background:var(--ok);}
+.dot.lease{background:var(--accent-dark);}
+.dot.guest{background:var(--text-soft);}
+.cal-cell.selected .dot{outline:1px solid #fff;}
+.cal-day-head{font-weight:700; margin:4px 0 8px;}

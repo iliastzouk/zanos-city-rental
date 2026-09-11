@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260911i">
+<link rel="stylesheet" href="style.css?v=20260911j">
 </head>
 <body>
 
@@ -125,6 +125,7 @@
       <button class="tab-btn" data-tab="payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="calendar" data-i18n="tab.calendar">Ημερολόγιο</button>
       <button class="tab-btn" data-tab="documents" data-i18n="tab.documents">Έγγραφα</button>
       <button class="tab-btn" data-tab="info" data-i18n="tab.info">Πληροφορίες</button>
       <button class="tab-btn" data-tab="guests" data-i18n="tab.guests">Επισκέπτες</button>
@@ -317,6 +318,21 @@
       </div>
     </div>
 
+
+    <div class="tab-panel" data-panel="calendar" hidden>
+      <div class="card">
+        <div class="cal-head">
+          <button type="button" class="btn-small" id="ownerCalPrev" data-i18n="cal.prev">‹</button>
+          <h2 id="ownerCalTitle">—</h2>
+          <button type="button" class="btn-small" id="ownerCalNext" data-i18n="cal.next">›</button>
+        </div>
+        <button type="button" class="btn-small" id="ownerCalToday" data-i18n="cal.today">Σήμερα</button>
+        <div id="ownerCalGrid" class="cal-grid"></div>
+        <p class="muted small-note" data-i18n="cal.legend">Πάτα μια μέρα για λεπτομέρειες.</p>
+        <div id="ownerCalDay" class="list"></div>
+      </div>
+    </div>
+
     <div class="tab-panel" data-panel="documents" hidden>
       <div class="card">
         <h2 data-i18n="doc.formTitle">Ανέβασμα εγγράφου</h2>
@@ -420,6 +436,7 @@
       <button class="tab-btn active" data-tab="t-payments" data-i18n="tab.payments">Πληρωμές</button>
       <button class="tab-btn" data-tab="t-maintenance" data-i18n="tab.maintenance">Βλάβες</button>
       <button class="tab-btn" data-tab="t-messages" data-i18n="tab.messages">Μηνύματα</button>
+      <button class="tab-btn" data-tab="t-calendar" data-i18n="tab.calendar">Ημερολόγιο</button>
       <button class="tab-btn" data-tab="t-documents" data-i18n="tab.documents">Έγγραφα</button>
       <button class="tab-btn" data-tab="t-info" data-i18n="tab.info">Πληροφορίες</button>
     </nav>
@@ -470,6 +487,21 @@
     </div>
 
 
+
+    <div class="tab-panel" data-panel="t-calendar" hidden>
+      <div class="card">
+        <div class="cal-head">
+          <button type="button" class="btn-small" id="tenantCalPrev" data-i18n="cal.prev">‹</button>
+          <h2 id="tenantCalTitle">—</h2>
+          <button type="button" class="btn-small" id="tenantCalNext" data-i18n="cal.next">›</button>
+        </div>
+        <button type="button" class="btn-small" id="tenantCalToday" data-i18n="cal.today">Σήμερα</button>
+        <div id="tenantCalGrid" class="cal-grid"></div>
+        <p class="muted small-note" data-i18n="cal.legend">Πάτα μια μέρα για λεπτομέρειες.</p>
+        <div id="tenantCalDay" class="list"></div>
+      </div>
+    </div>
+
     <div class="tab-panel" data-panel="t-documents" hidden>
       <div class="card">
         <h2 data-i18n="doc.listTitle">Έγγραφα</h2>
@@ -489,7 +521,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260911i"></script>
-<script src="app.js?v=20260911i"></script>
+<script src="i18n.js?v=20260911j"></script>
+<script src="app.js?v=20260911j"></script>
 </body>
 </html>

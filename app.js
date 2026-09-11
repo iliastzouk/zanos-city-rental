@@ -7,9 +7,15 @@ const SUPABASE_KEY = 'sb_publishable_kjWHvwntT1U__wY_5K0F1w_cd_YhBT9';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Enum values live in the DB in English; the labels come from the active language.
-const categoryLabel = (v) => t('cat.' + v);
-const statusLabel = (v) => t('st.' + v);
-const priorityLabel = (v) => t('pri.' + v);
+// An unknown value falls back to itself rather than printing a translation key.
+function enumLabel(prefix, value) {
+  const key = prefix + '.' + value;
+  const label = t(key);
+  return label === key ? String(value) : label;
+}
+const categoryLabel = (v) => enumLabel('cat', v);
+const statusLabel = (v) => enumLabel('st', v);
+const priorityLabel = (v) => enumLabel('pri', v);
 
 let currentUser = null;
 let currentMembership = null; // { property_id, role, ... }
@@ -43,6 +49,20 @@ function fmtMoney(n) {
 }
 function fmtDateTime(d) {
   return new Date(d).toLocaleString(dateLocale());
+}
+// 'YYYY-MM-DD' parsed as local, not UTC, so a day never shifts.
+function parseDate(s) {
+  const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function isoDate(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+// The month a charge belongs to, in whichever language is active. Storing this
+// text would freeze it in one language for everyone.
+function fmtMonth(d) {
+  return parseDate(d).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
 }
 function escapeHtml(s) {
   const div = document.createElement('div');
@@ -273,6 +293,7 @@ async function loadOwnerDashboard() {
   await refreshAllowedTenants();
   await refreshPeople();
   await refreshDocuments('owner');
+  await renderCalendar('owner');
   await refreshAudit();
 }
 
@@ -564,7 +585,7 @@ async function refreshOwnerPayments() {
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
+        <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
       <span class="pill ${p.status}">${statusLabel(p.status)}</span>
@@ -922,10 +943,139 @@ document.getElementById('guestInviteForm').addEventListener('submit', async (e) 
 });
 
 // ============================================================
+// Calendar
+// ============================================================
+
+const calendarMonth = { owner: null, tenant: null };
+const calendarDay = { owner: null, tenant: null };
+
+// Monday-first weekday initials, taken from the active locale rather than a
+// hardcoded list. 2024-01-01 was a Monday.
+function weekdayNames() {
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 1 + i).toLocaleDateString(dateLocale(), { weekday: 'short' }));
+}
+
+// Everything dated that the reader is allowed to see, keyed by 'YYYY-MM-DD'.
+async function collectEvents(prefix) {
+  const tenancies = prefix === 'owner'
+    ? allTenancies
+    : (currentTenancy ? [currentTenancy] : []);
+  if (tenancies.length === 0) return {};
+
+  const events = {};
+  const add = (date, kind, label) => {
+    if (!date) return;
+    const key = String(date).slice(0, 10);
+    (events[key] = events[key] || []).push({ kind, label });
+  };
+
+  for (const tenancy of tenancies) {
+    add(tenancy.start_date, 'lease', `${t('cal.leaseStart')} — ${tenancy.tenant_name || t('tenancy.defaultTenant')}`);
+    add(tenancy.end_date, 'lease', `${t('cal.leaseEnd')} — ${tenancy.tenant_name || t('tenancy.defaultTenant')}`);
+  }
+
+  const { data: payments } = await sb.from('rental_payments')
+    .select('*').in('tenancy_id', tenancies.map(x => x.id));
+  (payments || []).forEach(p => {
+    add(p.due_date, p.status === 'paid' ? 'paid' : 'due',
+      `${categoryLabel(p.category)} — ${fmtMoney(p.amount)} · ${statusLabel(p.status)}`);
+  });
+
+  if (prefix === 'owner') {
+    const { data: invites } = await sb.from('rental_guest_invites')
+      .select('*').eq('property_id', currentProperty.id).is('revoked_at', null);
+    (invites || []).forEach(g => {
+      add(g.expires_at, 'guest', `${t('cal.guestExpires')} — ${g.label || g.code}`);
+    });
+  }
+  return events;
+}
+
+async function renderCalendar(prefix) {
+  if (!calendarMonth[prefix]) {
+    const now = new Date();
+    calendarMonth[prefix] = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  const month = calendarMonth[prefix];
+  const events = await collectEvents(prefix);
+
+  document.getElementById(prefix + 'CalTitle').textContent =
+    month.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
+
+  // Monday-first: getDay() is 0 for Sunday, so Sunday sits at the end.
+  const firstWeekday = (month.getDay() + 6) % 7;
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const todayKey = isoDate(new Date());
+
+  let cells = weekdayNames().map(n => `<div class="cal-wd">${escapeHtml(n)}</div>`).join('');
+  cells += Array.from({ length: firstWeekday }, () => '<div class="cal-cell empty"></div>').join('');
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = isoDate(new Date(month.getFullYear(), month.getMonth(), day));
+    const dayEvents = events[key] || [];
+    const kinds = [...new Set(dayEvents.map(e => e.kind))];
+    cells += `
+      <button type="button" class="cal-cell${key === todayKey ? ' today' : ''}${
+        key === calendarDay[prefix] ? ' selected' : ''}" data-day="${key}">
+        <span class="n">${day}</span>
+        <span class="dots">${kinds.map(k => `<i class="dot ${k}"></i>`).join('')}</span>
+      </button>`;
+  }
+  document.getElementById(prefix + 'CalGrid').innerHTML = cells;
+
+  const dayEl = document.getElementById(prefix + 'CalDay');
+  const selected = calendarDay[prefix];
+  const list = selected ? (events[selected] || []) : [];
+  if (!selected) {
+    const monthHas = Object.keys(events).some(k => k.slice(0, 7) === isoDate(month).slice(0, 7));
+    dayEl.innerHTML = `<span class="muted">${monthHas ? t('cal.legend') : t('cal.monthEmpty')}</span>`;
+  } else if (list.length === 0) {
+    dayEl.innerHTML = `<span class="muted">${t('cal.noEvents')}</span>`;
+  } else {
+    dayEl.innerHTML = `<div class="cal-day-head">${escapeHtml(fmtDate(selected))}</div>` +
+      list.map(e => `
+        <div class="list-item">
+          <div class="main"><div class="title">${escapeHtml(e.label)}</div></div>
+          <i class="dot ${e.kind}"></i>
+        </div>`).join('');
+  }
+
+  document.getElementById(prefix + 'CalGrid').querySelectorAll('[data-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-day');
+      calendarDay[prefix] = calendarDay[prefix] === key ? null : key;
+      renderCalendar(prefix);
+    });
+  });
+}
+
+['owner', 'tenant'].forEach(prefix => {
+  document.getElementById(prefix + 'CalPrev').addEventListener('click', () => {
+    const m = calendarMonth[prefix] || new Date();
+    calendarMonth[prefix] = new Date(m.getFullYear(), m.getMonth() - 1, 1);
+    calendarDay[prefix] = null;
+    renderCalendar(prefix);
+  });
+  document.getElementById(prefix + 'CalNext').addEventListener('click', () => {
+    const m = calendarMonth[prefix] || new Date();
+    calendarMonth[prefix] = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+    calendarDay[prefix] = null;
+    renderCalendar(prefix);
+  });
+  document.getElementById(prefix + 'CalToday').addEventListener('click', () => {
+    const now = new Date();
+    calendarMonth[prefix] = new Date(now.getFullYear(), now.getMonth(), 1);
+    calendarDay[prefix] = isoDate(now);
+    renderCalendar(prefix);
+  });
+});
+
+// ============================================================
 // Documents (owner and tenant share this)
 // ============================================================
 
-function docCategoryLabel(v) { return t('doccat.' + v); }
+function docCategoryLabel(v) { return enumLabel('doccat', v); }
 
 async function refreshDocuments(prefix) {
   const canManage = prefix === 'owner';
@@ -1087,6 +1237,7 @@ async function loadTenantDashboard() {
   await refreshTenantMessages();
   await renderInfoList('tenantInfoList');
   await refreshDocuments('tenant');
+  await renderCalendar('tenant');
 }
 
 async function refreshTenantPayments() {
@@ -1103,7 +1254,7 @@ async function refreshTenantPayments() {
     <div class="list-item">
       <div class="main">
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
-        <div class="sub">${p.notes ? escapeHtml(p.notes) + ' · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}</div>
+        <div class="sub">${p.due_date ? '<strong>' + escapeHtml(fmtMonth(p.due_date)) + '</strong> · ' : ''}${t('pay.dueLabel')}: ${fmtDate(p.due_date)}${p.paid_on ? ' · ' + t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
       </div>
       <span class="pill ${p.status}">${statusLabel(p.status)}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
