@@ -717,7 +717,9 @@ async function refreshOwnerPayments() {
         ${receiptButton(p)}
         ${payNowLink(p)}
         <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
-        ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
+        ${p.status === 'paid'
+          ? `<button class="btn-small" data-unmark-paid="${p.id}">${t('pay.undoPaid')}</button>`
+          : `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>`}
       </div>
     </div>`);
 
@@ -735,8 +737,25 @@ async function refreshOwnerPayments() {
 
   listEl.querySelectorAll('[data-mark-paid]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await sb.from('rental_payments').update({ status: 'paid', paid_on: new Date().toISOString().slice(0, 10) })
+      btn.disabled = true;
+      const { error } = await sb.from('rental_payments')
+        .update({ status: 'paid', paid_on: new Date().toISOString().slice(0, 10) })
         .eq('id', btn.getAttribute('data-mark-paid'));
+      if (error) { reportFailure('payments.markPaid', error); btn.disabled = false; return; }
+      await refreshOwnerPayments();
+    });
+  });
+
+  // Confirming payment was a one-way door: the button vanished afterwards and
+  // editing never touched the status, so a mis-tap could not be taken back.
+  // The tenant's own claim is left alone — it is their record, not this one.
+  listEl.querySelectorAll('[data-unmark-paid]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const { error } = await sb.from('rental_payments')
+        .update({ status: 'pending', paid_on: null })
+        .eq('id', btn.getAttribute('data-unmark-paid'));
+      if (error) { reportFailure('payments.unmarkPaid', error); btn.disabled = false; return; }
       await refreshOwnerPayments();
     });
   });
