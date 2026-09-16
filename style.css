@@ -137,6 +137,10 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .pill.in_progress{background:#fdf1dc; color:var(--warn);}
 .pill.resolved, .pill.closed{background:#e6f4ea; color:var(--ok);}
 .pill.low{background:var(--bg-alt); color:var(--text-soft);}
+/* The tenant says they have paid; the owner has not confirmed it yet. */
+.pill.declared{background:#eef3fb; color:#3a5a8c;}
+/* A link styled as a button still has to sit on the row like one. */
+a.btn-small{display:inline-block; text-decoration:none;}
 .pill.medium{background:#fdf1dc; color:var(--warn);}
 .pill.high, .pill.urgent{background:#fbe9e7; color:var(--danger);}
 

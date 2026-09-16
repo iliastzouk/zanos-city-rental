@@ -346,6 +346,13 @@ async function uploadTenancyFile(file, folder, tenancyId) {
   return { path, error };
 }
 
+// A stored link is rendered as an href, so anything that is not plain web
+// navigation (javascript:, data:) must never reach the attribute. The column
+// carries the same check, but old rows predate it.
+function safeUrl(url) {
+  return /^https?:\/\//i.test(url || '') ? url : '';
+}
+
 async function openStoredFile(path) {
   // The bucket is private, so every view needs a short-lived signed URL.
   const { data, error } = await sb.storage.from('rental-documents').createSignedUrl(path, 60);
@@ -444,7 +451,7 @@ async function deleteTenancy(tenancy) {
   const msg = document.getElementById('tenancyListMsg');
 
   const [payments, messages, requests, documents] = await Promise.all([
-    sb.from('rental_payments').select('id, proof_path').eq('tenancy_id', tenancy.id),
+    sb.from('rental_payments').select('id, proof_path, receipt_path').eq('tenancy_id', tenancy.id),
     sb.from('rental_messages').select('id').eq('tenancy_id', tenancy.id),
     sb.from('rental_maintenance_requests').select('id').eq('tenancy_id', tenancy.id),
     sb.from('rental_documents').select('id, storage_path').eq('tenancy_id', tenancy.id)
@@ -469,7 +476,8 @@ async function deleteTenancy(tenancy) {
   // linger in the bucket unreachable and unaccounted for.
   const paths = [
     ...documents.data.map(d => d.storage_path),
-    ...payments.data.map(p => p.proof_path)
+    ...payments.data.map(p => p.proof_path),
+    ...payments.data.map(p => p.receipt_path)
   ].filter(Boolean);
   if (paths.length) await sb.storage.from('rental-documents').remove(paths);
 
@@ -637,6 +645,26 @@ function refreshPaymentsHeader() {
 
 }
 
+// The tenant's claim is not the owner's confirmation, so it shows beside the
+// status rather than replacing it. Once the owner confirms, the status says
+// PAID and the claim has done its job.
+function declaredPill(p) {
+  return p.tenant_marked_paid_at && p.status !== 'paid'
+    ? `<span class="pill declared">${t('pay.declaredPill')}</span>` : '';
+}
+
+function payNowLink(p) {
+  const url = safeUrl(p.pay_url);
+  return url
+    ? `<a class="btn-small" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${t('pay.payNow')}</a>`
+    : '';
+}
+
+function receiptButton(p) {
+  return p.receipt_path
+    ? `<button class="btn-small" data-open-proof="${escapeHtml(p.receipt_path)}">${t('pay.openReceipt')}</button>` : '';
+}
+
 async function refreshOwnerPayments() {
   const listEl = document.getElementById('ownerPaymentsList');
   refreshPaymentsHeader();
@@ -680,8 +708,11 @@ async function refreshOwnerPayments() {
         ].filter(Boolean).join(' · ')}</div>
       </div>
       ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
+      ${declaredPill(p)}
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
+      ${receiptButton(p)}
+      ${payNowLink(p)}
       <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
       ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
     </div>`);
@@ -891,6 +922,7 @@ function startPaymentEdit(payment) {
   document.getElementById('paymentAmount').value = payment.amount;
   document.getElementById('paymentDue').value = payment.due_date || '';
   document.getElementById('paymentNotes').value = payment.notes || '';
+  document.getElementById('paymentPayUrl').value = payment.pay_url || '';
   document.getElementById('paymentFile').value = '';
   document.getElementById('paymentRecurring').checked = false;
 
@@ -961,6 +993,13 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
   const recurring = document.getElementById('paymentRecurring').checked;
   const file = document.getElementById('paymentFile').files[0] || null;
 
+  const payUrlRaw = document.getElementById('paymentPayUrl').value.trim();
+  if (payUrlRaw && !safeUrl(payUrlRaw)) {
+    setMsg(document.getElementById('paymentMsg'), t('pay.payUrlInvalid'), 'error');
+    return;
+  }
+  const payUrl = payUrlRaw || null;
+
   if (file && file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
   if (recurring && !editingPaymentId) {
@@ -984,7 +1023,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       proofPath = path;
     }
 
-    const payload = { category, amount, due_date: due, notes };
+    const payload = { category, amount, due_date: due, notes, pay_url: payUrl };
     if (proofPath) payload.proof_path = proofPath;
 
     const { error } = editingPaymentId
@@ -1660,8 +1699,15 @@ async function refreshTenantPayments() {
           p.notes ? escapeHtml(p.notes) : ''
         ].filter(Boolean).join(' · ')}</div>
       </div>
+      ${declaredPill(p)}
       <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
       ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
+      ${payNowLink(p)}
+      ${receiptButton(p)}
+      ${p.status === 'paid' ? '' : `<button class="btn-small" data-declare="${p.id}">${
+        p.tenant_marked_paid_at ? t('pay.undoDeclare') : t('pay.declarePaid')}</button>`}
+      ${p.tenant_marked_paid_at && !p.receipt_path && p.status !== 'paid'
+        ? `<button class="btn-small" data-receipt="${p.id}">${t('pay.addReceipt')}</button>` : ''}
     </div>`);
 
   wirePaymentList(listEl, 'tenantPaymentsList', refreshTenantPayments);
@@ -1669,7 +1715,59 @@ async function refreshTenantPayments() {
   listEl.querySelectorAll('[data-open-proof]').forEach(btn => {
     btn.addEventListener('click', () => openStoredFile(btn.getAttribute('data-open-proof')));
   });
+
+  listEl.querySelectorAll('[data-declare]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-declare');
+      const row = payments.find(p => p.id === id);
+      btn.disabled = true;   // the round trip is not instant; do not double-fire
+      const { error } = await sb.rpc('rental_declare_payment', { p_payment_id: id });
+      if (error) { reportFailure('payments.declare', error); btn.disabled = false; return; }
+      // Withdrawing the claim detaches the receipt, so the file goes with it.
+      if (row && row.tenant_marked_paid_at && row.receipt_path) {
+        await sb.storage.from('rental-documents').remove([row.receipt_path]);
+      }
+      await refreshTenantPayments();
+    });
+  });
+
+  listEl.querySelectorAll('[data-receipt]').forEach(btn => {
+    btn.addEventListener('click', () => pickReceiptFor(btn.getAttribute('data-receipt')));
+  });
 }
+
+// One hidden picker serves every row: opening it is the whole interaction, and
+// the charge it belongs to is remembered until the file comes back.
+let receiptForPayment = null;
+
+function pickReceiptFor(paymentId) {
+  receiptForPayment = paymentId;
+  const picker = document.getElementById('receiptPicker');
+  picker.value = '';   // choosing the same file twice must still fire a change
+  picker.click();
+}
+
+document.getElementById('receiptPicker').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const paymentId = receiptForPayment;
+  receiptForPayment = null;
+  if (!file || !paymentId || !currentTenancy) return;
+  if (file.size > MAX_UPLOAD_BYTES) { alert(t('doc.tooBig')); return; }
+
+  const { path, error: upErr } = await uploadTenancyFile(file, 'receipts', currentTenancy.id);
+  if (upErr) { reportFailure('payments.receiptUpload', upErr); return; }
+
+  // The charge is already declared, so this call only attaches the file.
+  const { error } = await sb.rpc('rental_declare_payment', {
+    p_payment_id: paymentId, p_receipt_path: path
+  });
+  if (error) {
+    await sb.storage.from('rental-documents').remove([path]);   // no orphan
+    reportFailure('payments.receiptAttach', error);
+    return;
+  }
+  await refreshTenantPayments();
+});
 
 ['tenantStatusFilter', 'tenantCategoryFilter'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => {
