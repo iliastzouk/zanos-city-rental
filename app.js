@@ -707,14 +707,18 @@ async function refreshOwnerPayments() {
           p.notes ? escapeHtml(p.notes) : ''
         ].filter(Boolean).join(' · ')}</div>
       </div>
-      ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
-      ${declaredPill(p)}
-      <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
-      ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
-      ${receiptButton(p)}
-      ${payNowLink(p)}
-      <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
-      ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
+      <div class="row-pills">
+        ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
+        ${declaredPill(p)}
+        <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
+      </div>
+      <div class="row-actions">
+        ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
+        ${receiptButton(p)}
+        ${payNowLink(p)}
+        <button class="btn-small" data-edit-payment="${p.id}">${t('pay.edit')}</button>
+        ${p.status !== 'paid' ? `<button class="btn-small" data-mark-paid="${p.id}">${t('pay.markPaid')}</button>` : ''}
+      </div>
     </div>`);
 
   wirePaymentList(listEl, 'ownerPaymentsList', refreshOwnerPayments);
@@ -1699,15 +1703,19 @@ async function refreshTenantPayments() {
           p.notes ? escapeHtml(p.notes) : ''
         ].filter(Boolean).join(' · ')}</div>
       </div>
-      ${declaredPill(p)}
-      <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
-      ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
-      ${payNowLink(p)}
-      ${receiptButton(p)}
-      ${p.status === 'paid' ? '' : `<button class="btn-small" data-declare="${p.id}">${
-        p.tenant_marked_paid_at ? t('pay.undoDeclare') : t('pay.declarePaid')}</button>`}
-      ${p.tenant_marked_paid_at && !p.receipt_path && p.status !== 'paid'
-        ? `<button class="btn-small" data-receipt="${p.id}">${t('pay.addReceipt')}</button>` : ''}
+      <div class="row-pills">
+        ${declaredPill(p)}
+        <span class="pill ${effectiveStatus(p)}">${statusLabel(effectiveStatus(p))}</span>
+      </div>
+      <div class="row-actions">
+        ${p.proof_path ? `<button class="btn-small" data-open-proof="${escapeHtml(p.proof_path)}">${t('pay.openAttachment')}</button>` : ''}
+        ${payNowLink(p)}
+        ${receiptButton(p)}
+        ${p.status === 'paid' ? '' : `<button class="btn-small" data-declare="${p.id}">${
+          p.tenant_marked_paid_at ? t('pay.undoDeclare') : t('pay.declarePaid')}</button>`}
+        ${p.tenant_marked_paid_at && !p.receipt_path && p.status !== 'paid'
+          ? `<button class="btn-small" data-receipt="${p.id}">${t('pay.addReceipt')}</button>` : ''}
+      </div>
     </div>`);
 
   wirePaymentList(listEl, 'tenantPaymentsList', refreshTenantPayments);

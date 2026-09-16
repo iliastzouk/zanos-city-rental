@@ -126,6 +126,14 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .list-item .main{flex:1; min-width:180px;}
 .list-item .title{font-weight:600; font-size:.92rem;}
 .list-item .sub{font-size:.8rem; color:var(--text-soft); margin-top:2px;}
+
+/* A payment row holds a variable number of pills and buttons. Left to wrap on
+   their own they broke differently on every row — a button riding up beside the
+   pills here, wrapping alone there. Grouping them fixes the shape: pills sit
+   beside the title, actions always take a line of their own. */
+.row-pills{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.row-actions{display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex:1 1 100%;}
+.row-actions:empty{display:none;}
 .pill{
   font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:999px;
   text-transform:uppercase; letter-spacing:.4px;
