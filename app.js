@@ -23,6 +23,7 @@ let currentProperty = null;
 let currentTenancy = null; // active tenancy (owner: latest active; tenant: their own)
 let editingTenancyId = null;
 let editingPaymentId = null;
+let editingPayment = null;   // the row itself, for its stored files and series
 let editingPaymentDue = null;
 let allTenancies = [];        // every tenancy of the property, newest first
 let paymentsTenancyId = null; // which one the Payments tab is showing
@@ -704,6 +705,9 @@ async function refreshOwnerPayments() {
         <div class="sub">${[
           p.due_date ? t('pay.dueLabel') + ': ' + fmtDate(p.due_date) : '',
           p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : '',
+          // Which day the tenant says they paid decides the date recorded below.
+          p.tenant_marked_paid_at && p.status !== 'paid'
+            ? t('pay.declaredOn', { date: fmtDate(p.tenant_marked_paid_at) }) : '',
           p.notes ? escapeHtml(p.notes) : ''
         ].filter(Boolean).join(' · ')}</div>
       </div>
@@ -737,10 +741,15 @@ async function refreshOwnerPayments() {
 
   listEl.querySelectorAll('[data-mark-paid]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-mark-paid');
+      const row = payments.find(p => p.id === id);
       btn.disabled = true;
+      // The money moved on the day the tenant says it did, not on the day the
+      // owner got round to confirming it.
+      const paidOn = (row && row.tenant_marked_paid_at
+        ? new Date(row.tenant_marked_paid_at) : new Date()).toISOString().slice(0, 10);
       const { error } = await sb.from('rental_payments')
-        .update({ status: 'paid', paid_on: new Date().toISOString().slice(0, 10) })
-        .eq('id', btn.getAttribute('data-mark-paid'));
+        .update({ status: 'paid', paid_on: paidOn }).eq('id', id);
       if (error) { reportFailure('payments.markPaid', error); btn.disabled = false; return; }
       await refreshOwnerPayments();
     });
@@ -938,6 +947,7 @@ function startPaymentEdit(payment) {
   if (!payment) return;
   editingPaymentId = payment.id;
   editingPaymentDue = payment.due_date || null;
+  editingPayment = payment;
 
   const catSelect = document.getElementById('paymentCategory');
   catSelect.value = payment.category;
@@ -956,6 +966,7 @@ function startPaymentEdit(payment) {
   document.getElementById('paymentFileLabel').textContent =
     payment.proof_path ? t('pay.replaceFile') : t('pay.attachFile');
   document.getElementById('paymentEditNote').hidden = false;
+  document.getElementById('deleteSeriesBtn').hidden = !payment.series_id;
   document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.update');
   document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -963,6 +974,8 @@ function startPaymentEdit(payment) {
 function cancelPaymentEdit() {
   editingPaymentId = null;
   editingPaymentDue = null;
+  editingPayment = null;
+  document.getElementById('deleteSeriesBtn').hidden = true;
   document.getElementById('paymentForm').reset();
   document.getElementById('paymentFile').disabled = false;
   document.getElementById('paymentFormTitle').textContent = t('pay.formTitle');
@@ -976,6 +989,49 @@ function cancelPaymentEdit() {
 }
 
 document.getElementById('cancelPaymentEdit').addEventListener('click', cancelPaymentEdit);
+
+// Charges could be created but never removed: a mistyped recurring series left
+// twelve rows with no way out short of deleting the whole tenancy. Deleting
+// lives in the edit row rather than on every card, which would have pushed a
+// payment row to seven buttons.
+async function removePaymentFiles(rows) {
+  const paths = rows.flatMap(r => [r.proof_path, r.receipt_path]).filter(Boolean);
+  if (paths.length) await sb.storage.from('rental-documents').remove(paths);
+}
+
+document.getElementById('deletePaymentBtn').addEventListener('click', async () => {
+  if (!editingPaymentId || !editingPayment) return;
+  if (!confirm(t('pay.deleteConfirm', { what: paymentSummary(editingPayment) }))) return;
+
+  await removePaymentFiles([editingPayment]);
+  const { error } = await sb.from('rental_payments').delete().eq('id', editingPaymentId);
+  if (error) { reportFailure('payments.delete', error, document.getElementById('paymentMsg')); return; }
+  cancelPaymentEdit();
+  await refreshOwnerPayments();
+});
+
+// Only the unpaid part of the series, and only from this charge onward: months
+// already settled are a record of money that moved.
+document.getElementById('deleteSeriesBtn').addEventListener('click', async () => {
+  if (!editingPayment || !editingPayment.series_id) return;
+  const msg = document.getElementById('paymentMsg');
+
+  let q = sb.from('rental_payments').select('*')
+    .eq('series_id', editingPayment.series_id).neq('status', 'paid');
+  if (editingPayment.due_date) q = q.gte('due_date', editingPayment.due_date);
+  const { data: rows, error: loadErr } = await q;
+  if (loadErr) { reportFailure('payments.seriesLoad', loadErr, msg); return; }
+  if (!rows || rows.length === 0) { setMsg(msg, t('pay.seriesNothing'), 'error'); return; }
+  if (!confirm(t('pay.deleteSeriesConfirm', { count: rows.length }))) return;
+
+  await removePaymentFiles(rows);
+  const { error } = await sb.from('rental_payments')
+    .delete().in('id', rows.map(r => r.id));
+  if (error) { reportFailure('payments.deleteSeries', error, msg); return; }
+  cancelPaymentEdit();
+  await refreshOwnerPayments();
+  alert(t('pay.seriesDeleted', { count: rows.length }));
+});
 
 ['paymentsTenancy', 'paymentsStatusFilter', 'paymentsCategoryFilter'].forEach(id => {
   document.getElementById(id).addEventListener('change', async (e) => {
@@ -1060,6 +1116,13 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       if (proofPath) await sb.storage.from('rental-documents').remove([proofPath]);
       reportFailure(editingPaymentId ? 'payments.update' : 'payments.add', error, msg);
       return;
+    }
+
+    // The column now points at the new file; the old one would otherwise sit in
+    // the bucket forever, unreachable and undeletable.
+    const replaced = proofPath && editingPayment && editingPayment.proof_path;
+    if (replaced && editingPayment.proof_path !== proofPath) {
+      await sb.storage.from('rental-documents').remove([editingPayment.proof_path]);
     }
 
     // Ticking "repeat" while editing turns this charge into the first of a

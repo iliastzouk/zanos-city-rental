@@ -92,6 +92,7 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 }
 .btn-small:hover{background:var(--line);}
 .btn-small.danger{color:var(--danger); border-color:#e8c4bd;}
+.danger-link{color:var(--danger);}
 
 .msg{margin-top:14px; padding:10px 14px; border-radius:10px; font-size:.88rem;}
 .msg.ok{background:#e6f4ea; color:var(--ok);}
