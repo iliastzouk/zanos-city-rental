@@ -666,12 +666,42 @@ function receiptButton(p) {
     ? `<button class="btn-small" data-open-proof="${escapeHtml(p.receipt_path)}">${t('pay.openReceipt')}</button>` : '';
 }
 
+// What is actually owed, before any filter narrows the list. A recurring charge
+// writes one row per month to the end of the lease, so a single total of
+// "everything unpaid" would read €6,600 the day a year of rent is scheduled —
+// money that is not wanted yet. Split it by when it is due, and give no total
+// at all for the scheduled months: a true number answering a question nobody
+// asked, which reads as a debt. The list below carries every one of them.
+function paymentSummaryHtml(rows, settledKey) {
+  const unpaid = rows.filter(p => p.status !== 'paid');
+  if (unpaid.length === 0) return `<span class="pill paid">${t(settledKey)}</span>`;
+
+  const buckets = { overdue: [], soon: [], scheduled: [] };
+  unpaid.forEach(p => buckets[payBucket(p)].push(p));
+  const total = (list) => list.reduce((sum, p) => sum + Number(p.amount), 0);
+  const bucketPill = (cls, key, list) => list.length
+    ? `<span class="pill ${cls}">${t(key, { amount: fmtMoney(total(list)), count: list.length })}</span>`
+    : '';
+  // The single next obligation, named with its amount.
+  const nextUp = unpaid
+    .filter(p => p.due_date && !isOverdue(p))
+    .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
+
+  return [
+    bucketPill('overdue', 'pay.overdueCount', buckets.overdue),
+    bucketPill('pending', 'pay.dueSoon', buckets.soon),
+    nextUp ? `<span class="pill low">${t('pay.nextDue', { amount: fmtMoney(nextUp.amount), date: fmtDate(nextUp.due_date) })}</span>` : ''
+  ].join('');
+}
+
 async function refreshOwnerPayments() {
   const listEl = document.getElementById('ownerPaymentsList');
   refreshPaymentsHeader();
 
+  const sumEl = document.getElementById('ownerPaySummary');
   const tenancy = paymentsTenancy();
   if (!tenancy) {
+    sumEl.innerHTML = '';
     listEl.innerHTML = `<span class="muted">${t('need.tenancyFirst')}</span>`;
     return;
   }
@@ -681,9 +711,14 @@ async function refreshOwnerPayments() {
   if (error) { reportFailure('payments.load', error); return; }
 
   if (!rows || rows.length === 0) {
+    sumEl.innerHTML = '';
     listEl.innerHTML = `<span class="muted">${t('pay.empty')}</span>`;
     return;
   }
+
+  // The owner is the one owed the money, so the same three figures belong here
+  // too — read from every row, before a filter narrows the list.
+  sumEl.innerHTML = paymentSummaryHtml(rows, 'pay.allCollected');
 
   const statusFilter = document.getElementById('paymentsStatusFilter').value;
   const categoryFilter = document.getElementById('paymentsCategoryFilter').value;
@@ -967,6 +1002,9 @@ function startPaymentEdit(payment) {
     payment.proof_path ? t('pay.replaceFile') : t('pay.attachFile');
   document.getElementById('paymentEditNote').hidden = false;
   document.getElementById('deleteSeriesBtn').hidden = !payment.series_id;
+  document.getElementById('removeBillBtn').hidden = !payment.proof_path;
+  document.getElementById('applySeriesRow').hidden = !payment.series_id;
+  document.getElementById('applyToSeries').checked = false;
   document.querySelector('#paymentForm button[type=submit]').textContent = t('pay.update');
   document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -976,6 +1014,9 @@ function cancelPaymentEdit() {
   editingPaymentDue = null;
   editingPayment = null;
   document.getElementById('deleteSeriesBtn').hidden = true;
+  document.getElementById('removeBillBtn').hidden = true;
+  document.getElementById('applySeriesRow').hidden = true;
+  document.getElementById('applyToSeries').checked = false;
   document.getElementById('paymentForm').reset();
   document.getElementById('paymentFile').disabled = false;
   document.getElementById('paymentFormTitle').textContent = t('pay.formTitle');
@@ -998,6 +1039,25 @@ async function removePaymentFiles(rows) {
   const paths = rows.flatMap(r => [r.proof_path, r.receipt_path]).filter(Boolean);
   if (paths.length) await sb.storage.from('rental-documents').remove(paths);
 }
+
+// Replacing a bill was the only way to correct one, so a file attached to the
+// wrong charge stayed there — and the tenant kept seeing it.
+document.getElementById('removeBillBtn').addEventListener('click', async () => {
+  if (!editingPaymentId || !editingPayment || !editingPayment.proof_path) return;
+  const msg = document.getElementById('paymentMsg');
+  if (!confirm(t('pay.removeBillConfirm'))) return;
+
+  const { error } = await sb.from('rental_payments')
+    .update({ proof_path: null }).eq('id', editingPaymentId);
+  if (error) { reportFailure('payments.removeBill', error, msg); return; }
+  // Only once the row no longer points at it.
+  await sb.storage.from('rental-documents').remove([editingPayment.proof_path]);
+  editingPayment.proof_path = null;
+  document.getElementById('removeBillBtn').hidden = true;
+  document.getElementById('paymentFileLabel').textContent = t('pay.attachFile');
+  setMsg(msg, t('pay.billRemoved'), 'ok');
+  await refreshOwnerPayments();
+});
 
 document.getElementById('deletePaymentBtn').addEventListener('click', async () => {
   if (!editingPaymentId || !editingPayment) return;
@@ -1030,7 +1090,7 @@ document.getElementById('deleteSeriesBtn').addEventListener('click', async () =>
   if (error) { reportFailure('payments.deleteSeries', error, msg); return; }
   cancelPaymentEdit();
   await refreshOwnerPayments();
-  alert(t('pay.seriesDeleted', { count: rows.length }));
+  setMsg(msg, t('pay.seriesDeleted', { count: rows.length }), 'ok');
 });
 
 ['paymentsTenancy', 'paymentsStatusFilter', 'paymentsCategoryFilter'].forEach(id => {
@@ -1081,6 +1141,8 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
 
   if (file && file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
+  let done = null;   // shown after the form resets, which clears the message line
+
   if (recurring && !editingPaymentId) {
     // Without a first date there is nothing to step monthly from.
     if (!due) { setMsg(msg, t('pay.needDueDate'), 'error'); return; }
@@ -1092,7 +1154,7 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       p_notes: notes
     });
     if (error) { reportFailure('payments.recurring', error, msg); return; }
-    alert(t('pay.recurringDone', { count: created }));
+    done = t('pay.recurringDone', { count: created });
   } else {
     let proofPath;
     if (file) {
@@ -1125,6 +1187,21 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
       await sb.storage.from('rental-documents').remove([editingPayment.proof_path]);
     }
 
+    // A rent rise means editing twelve rows one at a time unless the change can
+    // be carried forward. Only the months still unpaid and still ahead, and only
+    // what a series shares: each month keeps its own date, bill and payment link.
+    const spread = document.getElementById('applyToSeries').checked;
+    if (spread && editingPayment && editingPayment.series_id) {
+      let q = sb.from('rental_payments')
+        .update({ category, amount, notes })
+        .eq('series_id', editingPayment.series_id)
+        .neq('status', 'paid')
+        .neq('id', editingPaymentId);
+      if (due) q = q.gt('due_date', due);
+      const { error: spreadErr } = await q;
+      if (spreadErr) { reportFailure('payments.applySeries', spreadErr, msg); return; }
+    }
+
     // Ticking "repeat" while editing turns this charge into the first of a
     // series: the charge itself is already saved, so generate the months after
     // it rather than duplicating it.
@@ -1138,12 +1215,13 @@ document.getElementById('paymentForm').addEventListener('submit', async (e) => {
         p_notes: notes
       });
       if (recErr) { reportFailure('payments.recurringFromEdit', recErr, msg); return; }
-      alert(t('pay.recurringFromEdit', { count: created }));
+      done = t('pay.recurringFromEdit', { count: created });
     }
   }
 
   cancelPaymentEdit();
   await refreshOwnerPayments();
+  if (done) setMsg(msg, done, 'ok');
 });
 
 async function refreshOwnerMaintenance() {
@@ -1734,33 +1812,7 @@ async function refreshTenantPayments() {
     return;
   }
 
-  // What is actually owed, before any filter narrows the list. A recurring
-  // charge writes one row per month to the end of the lease, so a single total
-  // of "everything unpaid" would read €6,600 the day a year of rent is
-  // scheduled — money that is not wanted yet. Split it by when it is due.
-  const unpaid = rows.filter(p => p.status !== 'paid');
-  const buckets = { overdue: [], soon: [], scheduled: [] };
-  unpaid.forEach(p => buckets[payBucket(p)].push(p));
-  const total = (list) => list.reduce((sum, p) => sum + Number(p.amount), 0);
-  const bucketPill = (cls, key, list) => list.length
-    ? `<span class="pill ${cls}">${t(key, { amount: fmtMoney(total(list)), count: list.length })}</span>`
-    : '';
-  // The single next obligation, named with its amount — the second question a
-  // tenant actually has after "do I owe anything now?".
-  const nextUp = unpaid
-    .filter(p => p.due_date && !isOverdue(p))
-    .sort((a, b) => a.due_date.localeCompare(b.due_date))[0];
-
-  // Deliberately no total for the scheduled months. It is a true number that
-  // answers a question nobody asked, and reads as a debt that is not owed. The
-  // list below carries every one of them for anyone who wants to look.
-  sumEl.innerHTML = unpaid.length === 0
-    ? `<span class="pill paid">${t('pay.allSettled')}</span>`
-    : [
-        bucketPill('overdue', 'pay.overdueCount', buckets.overdue),
-        bucketPill('pending', 'pay.dueSoon', buckets.soon),
-        nextUp ? `<span class="pill low">${t('pay.nextDue', { amount: fmtMoney(nextUp.amount), date: fmtDate(nextUp.due_date) })}</span>` : ''
-      ].join('');
+  sumEl.innerHTML = paymentSummaryHtml(rows, 'pay.allSettled');
 
   const statusFilter = document.getElementById('tenantStatusFilter').value;
   const categoryFilter = document.getElementById('tenantCategoryFilter').value;
