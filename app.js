@@ -334,7 +334,11 @@ document.getElementById('joinPropertyForm').addEventListener('submit', async (e)
   const msg = document.getElementById('onboardingMsg');
   setMsg(msg, t('onb.joining'), '');
   const { error } = await sb.rpc('rental_join_property', { p_invite_code: code });
-  if (error) { setMsg(msg, t('onb.invalidCode'), 'error'); return; }
+  if (error) {
+    const notApproved = /approved tenant list/i.test(error.message || '');
+    setMsg(msg, notApproved ? t('onb.notApproved') : t('onb.invalidCode'), 'error');
+    return;
+  }
   await boot();
 });
 
@@ -2404,12 +2408,15 @@ async function boot() {
   const summary = summaryRows && summaryRows[0];
 
   if (!summary) {
-    const [{ data: canCreate }, { data: canJoin }] = await Promise.all([
-      sb.rpc('rental_can_create_property'),
-      sb.rpc('rental_can_join_as_tenant')
-    ]);
+    // Both cards used to be hidden for anyone on neither list, which is exactly
+    // what a brand-new account is — so registering landed on a blank page with
+    // nothing to read and nothing to do. The invite-code card is always offered
+    // now: the code alone gets nobody in, since rental_join_property checks the
+    // approved-tenant list itself, so showing it costs nothing and gives the
+    // one person who does have a code somewhere to put it.
+    const { data: canCreate } = await sb.rpc('rental_can_create_property');
     document.getElementById('ownerOnboardCard').hidden = !canCreate;
-    document.getElementById('tenantOnboardCard').hidden = !canJoin;
+    document.getElementById('onboardingHint').hidden = !!canCreate;
     showView('view-onboarding');
     return;
   }
