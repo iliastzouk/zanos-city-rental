@@ -298,6 +298,8 @@ a.btn-small{display:inline-block; text-decoration:none;}
 .cal-cell .dots{display:flex; gap:2px; min-height:6px;}
 .dot{width:6px; height:6px; border-radius:50%; display:inline-block;}
 .dot.due{background:var(--warn);}
+/* Late money must not share a colour with money that is merely coming. */
+.dot.overdue{background:var(--danger);}
 .dot.paid{background:var(--ok);}
 .dot.lease{background:var(--accent-dark);}
 .dot.guest{background:var(--text-soft);}

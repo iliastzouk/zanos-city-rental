@@ -422,10 +422,14 @@ async function refreshTenancies() {
           <div class="title">${escapeHtml(item.tenant_name || t('tenancy.defaultTenant'))}</div>
           <div class="sub">${fmtDate(item.start_date)} → ${item.end_date ? fmtDate(item.end_date) : t('dash')} · ${t('tenancy.rentLine', { amount: fmtMoney(item.monthly_rent) })}</div>
         </div>
-        <span class="pill ${isActive ? 'paid' : 'pending'}">${isActive ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
-        <button class="btn-small" data-edit-row="${item.id}">${t('tenancy.edit')}</button>
-        ${isActive ? `<button class="btn-small" data-end-row="${item.id}">${t('tenancy.endBtn')}</button>` : ''}
-        <button class="btn-small danger" data-delete-row="${item.id}">${t('tenancy.delete')}</button>
+        <div class="row-pills">
+          <span class="pill ${isActive ? 'paid' : 'pending'}">${isActive ? t('tenancy.statusActive') : t('tenancy.statusEnded')}</span>
+        </div>
+        <div class="row-actions">
+          <button class="btn-small" data-edit-row="${item.id}">${t('tenancy.edit')}</button>
+          ${isActive ? `<button class="btn-small" data-end-row="${item.id}">${t('tenancy.endBtn')}</button>` : ''}
+          <button class="btn-small danger" data-delete-row="${item.id}">${t('tenancy.delete')}</button>
+        </div>
       </div>`;
   }).join('');
 
@@ -520,12 +524,20 @@ document.getElementById('cancelTenancyEdit').addEventListener('click', cancelTen
 
 document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const listMsg = document.getElementById('tenancyListMsg');
+  const start = document.getElementById('leaseStart').value;
+  const end = document.getElementById('leaseEnd').value || null;
+  // A lease running backwards silently produces no recurring rent at all, since
+  // the generator steps from the first date until it passes the last.
+  if (end && end < start) { setMsg(listMsg, t('tenancy.endBeforeStart'), 'error'); return; }
+  setMsg(listMsg, '', '');
+
   const payload = {
     property_id: currentProperty.id,
     tenant_name: document.getElementById('tenantName').value.trim() || null,
     tenant_email: document.getElementById('tenantEmail').value.trim() || null,
-    start_date: document.getElementById('leaseStart').value,
-    end_date: document.getElementById('leaseEnd').value || null,
+    start_date: start,
+    end_date: end,
     monthly_rent: parseFloat(document.getElementById('rentAmount').value),
     common_expenses_yearly: parseFloat(document.getElementById('commonYearly').value) || null,
     internet_monthly: parseFloat(document.getElementById('internetMonthly').value) || null
@@ -535,7 +547,14 @@ document.getElementById('tenancyForm').addEventListener('submit', async (e) => {
     ? await sb.from('rental_tenancies').update(payload).eq('id', editingTenancyId)
     : await sb.from('rental_tenancies').insert({ ...payload, created_by: currentUser.id });
 
-  if (error) { reportFailure('tenancy.save', error); return; }
+  if (error) {
+    // The one active tenancy per property is a unique index, so a second one
+    // comes back as a constraint violation rather than anything a reader could
+    // make sense of.
+    const clash = error.code === '23505' || /rental_one_active_tenancy/i.test(error.message || '');
+    reportFailure('tenancy.save', error, listMsg, clash ? t('tenancy.alreadyActive') : null);
+    return;
+  }
   cancelTenancyEdit();
   await refreshTenancies();
 });
@@ -1280,9 +1299,15 @@ document.getElementById('ownerMessageForm').addEventListener('submit', async (e)
 
 async function refreshPropertyInfo() {
   const el = document.getElementById('ownerInfoList');
-  const { data: entries } = await sb.from('rental_property_info')
+  // A swallowed error rendered "nothing here yet", which reads as data loss.
+  const { data: entries, error } = await sb.from('rental_property_info')
     .select('*').eq('property_id', currentProperty.id)
     .order('sort_order', { ascending: true });
+  if (error) {
+    reportFailure('info.load', error);
+    el.innerHTML = `<span class="muted">${t('list.loadFailed')}</span>`;
+    return;
+  }
 
   if (!entries || entries.length === 0) {
     el.innerHTML = `<span class="muted">${t('info.empty')}</span>`;
@@ -1294,15 +1319,19 @@ async function refreshPropertyInfo() {
         <div class="title">${escapeHtml(entry.title)}</div>
         ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
       </div>
-      <span class="pill ${entry.visible_to_guests ? 'paid' : 'pending'}">
-        ${entry.visible_to_guests ? t('info.badgeGuest') : t('info.badgeTenantOnly')}
-      </span>
-      <button class="btn-small" data-move-info="${entry.id}" data-dir="-1"${
-        index === 0 ? ' disabled' : ''}>${t('info.moveUp')}</button>
-      <button class="btn-small" data-move-info="${entry.id}" data-dir="1"${
-        index === entries.length - 1 ? ' disabled' : ''}>${t('info.moveDown')}</button>
-      <button class="btn-small" data-edit-info="${entry.id}">${t('info.edit')}</button>
-      <button class="btn-small danger" data-delete-info="${entry.id}">${t('info.delete')}</button>
+      <div class="row-pills">
+        <span class="pill ${entry.visible_to_guests ? 'paid' : 'pending'}">
+          ${entry.visible_to_guests ? t('info.badgeGuest') : t('info.badgeTenantOnly')}
+        </span>
+      </div>
+      <div class="row-actions">
+        <button class="btn-small" data-move-info="${entry.id}" data-dir="-1"${
+          index === 0 ? ' disabled' : ''}>${t('info.moveUp')}</button>
+        <button class="btn-small" data-move-info="${entry.id}" data-dir="1"${
+          index === entries.length - 1 ? ' disabled' : ''}>${t('info.moveDown')}</button>
+        <button class="btn-small" data-edit-info="${entry.id}">${t('info.edit')}</button>
+        <button class="btn-small danger" data-delete-info="${entry.id}">${t('info.delete')}</button>
+      </div>
     </div>`).join('');
 
   el.querySelectorAll('[data-edit-info]').forEach(btn => {
@@ -1319,13 +1348,13 @@ async function refreshPropertyInfo() {
       const from = entries.findIndex(x => x.id === id);
       const to = from + dir;
       if (to < 0 || to >= entries.length) return;
-      const a = entries[from];
-      const b = entries[to];
-      const { error: e1 } = await sb.from('rental_property_info')
-        .update({ sort_order: b.sort_order }).eq('id', a.id);
-      const { error: e2 } = await sb.from('rental_property_info')
-        .update({ sort_order: a.sort_order }).eq('id', b.id);
-      if (e1 || e2) { reportFailure('info.reorder', e1 || e2); return; }
+      // One statement server-side: two updates could half-apply and leave both
+      // entries on the same sort_order, which is the arbitrary ordering the
+      // numbering exists to prevent.
+      const { error: swapErr } = await sb.rpc('rental_swap_info_order', {
+        p_a: entries[from].id, p_b: entries[to].id
+      });
+      if (swapErr) { reportFailure('info.reorder', swapErr); return; }
       await refreshPropertyInfo();
     });
   });
@@ -1333,7 +1362,9 @@ async function refreshPropertyInfo() {
   el.querySelectorAll('[data-delete-info]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('info.deleteConfirm'))) return;
-      await sb.from('rental_property_info').delete().eq('id', btn.getAttribute('data-delete-info'));
+      const { error: delErr } = await sb.from('rental_property_info')
+        .delete().eq('id', btn.getAttribute('data-delete-info'));
+      if (delErr) { reportFailure('info.delete', delErr); return; }
       await refreshPropertyInfo();
     });
   });
@@ -1363,8 +1394,14 @@ document.getElementById('cancelInfoEdit').addEventListener('click', cancelInfoEd
 
 document.getElementById('infoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const infoMsg = document.getElementById('infoMsg');
+  const title = document.getElementById('infoTitle').value.trim();
+  // 'required' is satisfied by a run of spaces, which would store an entry with
+  // no readable name at all.
+  if (!title) { setMsg(infoMsg, t('form.titleRequired'), 'error'); return; }
+  setMsg(infoMsg, '', '');
   const payload = {
-    title: document.getElementById('infoTitle').value.trim(),
+    title,
     body: document.getElementById('infoBody').value.trim() || null,
     visible_to_guests: document.getElementById('infoVisibleToGuests').checked
   };
@@ -1385,7 +1422,7 @@ document.getElementById('infoForm').addEventListener('submit', async (e) => {
       created_by: currentUser.id
     }));
   }
-  if (error) { reportFailure('info.save', error); return; }
+  if (error) { reportFailure('info.save', error, infoMsg); return; }
   cancelInfoEdit();
   await refreshPropertyInfo();
 });
@@ -1407,9 +1444,14 @@ function guestInviteStatus(invite) {
 
 async function refreshGuestInvites() {
   const el = document.getElementById('guestInviteList');
-  const { data: invites } = await sb.from('rental_guest_invites')
+  const { data: invites, error } = await sb.from('rental_guest_invites')
     .select('*').eq('property_id', currentProperty.id)
     .order('created_at', { ascending: false });
+  if (error) {
+    reportFailure('guests.load', error);
+    el.innerHTML = `<span class="muted">${t('list.loadFailed')}</span>`;
+    return;
+  }
 
   if (!invites || invites.length === 0) {
     el.innerHTML = `<span class="muted">${t('gcode.empty')}</span>`;
@@ -1425,9 +1467,11 @@ async function refreshGuestInvites() {
           invite.expires_at ? t('gcode.expiresOn', { date: fmtDate(invite.expires_at) }) : t('gcode.noExpiry')
         }</div>
       </div>
-      <span class="pill ${status.pill}">${t(status.key)}</span>
-      ${invite.revoked_at ? '' : `<button class="btn-small" data-copy-link="${escapeHtml(invite.code)}">${t('gcode.copyLink')}</button>`}
-      ${invite.revoked_at ? '' : `<button class="btn-small danger" data-revoke="${invite.id}">${t('gcode.revoke')}</button>`}
+      <div class="row-pills"><span class="pill ${status.pill}">${t(status.key)}</span></div>
+      <div class="row-actions">
+        ${invite.revoked_at ? '' : `<button class="btn-small" data-copy-link="${escapeHtml(invite.code)}">${t('gcode.copyLink')}</button>`}
+        ${invite.revoked_at ? '' : `<button class="btn-small danger" data-revoke="${invite.id}">${t('gcode.revoke')}</button>`}
+      </div>
     </div>`;
   }).join('');
 
@@ -1448,9 +1492,13 @@ async function refreshGuestInvites() {
   el.querySelectorAll('[data-revoke]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('gcode.revokeConfirm'))) return;
-      await sb.from('rental_guest_invites')
+      const { error: revErr } = await sb.from('rental_guest_invites')
         .update({ revoked_at: new Date().toISOString() })
         .eq('id', btn.getAttribute('data-revoke'));
+      if (revErr) {
+        reportFailure('guests.revoke', revErr, document.getElementById('guestInviteMsg'));
+        return;
+      }
       await refreshGuestInvites();
     });
   });
@@ -1468,7 +1516,9 @@ document.getElementById('guestInviteForm').addEventListener('submit', async (e) 
     expires_at: expiresAt,
     created_by: currentUser.id
   });
-  if (error) { alert(t('error', { msg: error.message })); return; }
+  const msg = document.getElementById('guestInviteMsg');
+  if (error) { reportFailure('guests.create', error, msg); return; }
+  setMsg(msg, '', '');
   document.getElementById('guestInviteLabel').value = '';
   await refreshGuestInvites();
 });
@@ -1506,16 +1556,22 @@ async function collectEvents(prefix) {
     add(tenancy.end_date, 'lease', `${t('cal.leaseEnd')} — ${tenancy.tenant_name || t('tenancy.defaultTenant')}`);
   }
 
-  const { data: payments } = await sb.from('rental_payments')
+  const { data: payments, error: payErr } = await sb.from('rental_payments')
     .select('*').in('tenancy_id', tenancies.map(x => x.id));
+  if (payErr) reportFailure('calendar.payments', payErr);
   (payments || []).forEach(p => {
-    add(p.due_date, p.status === 'paid' ? 'paid' : 'due',
-      `${categoryLabel(p.category)} — ${fmtMoney(p.amount)} · ${statusLabel(p.status)}`);
+    // Nothing writes the 'overdue' status, so reading the raw column had the
+    // calendar calling a late charge "pending" while the payments tab called it
+    // overdue — the same row, two answers, and one dot colour for both.
+    const state = effectiveStatus(p);
+    add(p.due_date, state === 'paid' ? 'paid' : state === 'overdue' ? 'overdue' : 'due',
+      `${categoryLabel(p.category)} — ${fmtMoney(p.amount)} · ${statusLabel(state)}`);
   });
 
   if (prefix === 'owner') {
-    const { data: invites } = await sb.from('rental_guest_invites')
+    const { data: invites, error: invErr } = await sb.from('rental_guest_invites')
       .select('*').eq('property_id', currentProperty.id).is('revoked_at', null);
+    if (invErr) reportFailure('calendar.guests', invErr);
     (invites || []).forEach(g => {
       add(g.expires_at, 'guest', `${t('cal.guestExpires')} — ${g.label || g.code}`);
     });
@@ -1622,8 +1678,10 @@ async function renderDocumentList(el, filter, canManage, emptyText) {
           <div class="title">${escapeHtml(d.title)}</div>
           <div class="sub">${docCategoryLabel(d.category)} · ${fmtDate(d.created_at)}</div>
         </div>
-        <button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>
-        ${canManage ? `<button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>` : ''}
+        <div class="row-actions">
+          <button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>
+          ${canManage ? `<button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>` : ''}
+        </div>
       </div>`).join('');
 
   el.querySelectorAll('[data-open-doc]').forEach(btn => {
@@ -1633,12 +1691,15 @@ async function renderDocumentList(el, filter, canManage, emptyText) {
   el.querySelectorAll('[data-del-doc]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('doc.deleteConfirm'))) return;
-      const { error: rmErr } = await sb.storage.from('rental-documents')
-        .remove([btn.getAttribute('data-path')]);
-      if (rmErr) { reportFailure('documents.removeFile', rmErr); return; }
+      // The row goes first. Removing the file first and then failing to remove
+      // the row left an entry whose Open button could never work again; this
+      // way the worst case is an unreferenced file, which nothing depends on.
       const { error: delErr } = await sb.from('rental_documents')
         .delete().eq('id', btn.getAttribute('data-del-doc'));
       if (delErr) { reportFailure('documents.removeRow', delErr); return; }
+      const { error: rmErr } = await sb.storage.from('rental-documents')
+        .remove([btn.getAttribute('data-path')]);
+      if (rmErr) { reportFailure('documents.removeFile', rmErr); return; }
       await refreshDocuments(canManage ? 'owner' : 'tenant');
     });
   });
@@ -1669,6 +1730,9 @@ function wireDocumentUpload(prefix) {
     const scope = document.getElementById(prefix + 'DocScope').value;
     if (scope === 'tenancy' && !docsTenancyId) { setMsg(msg, t('need.tenancyFirst'), 'error'); return; }
 
+    const title = document.getElementById(prefix + 'DocTitle').value.trim();
+    if (!title) { setMsg(msg, t('form.titleRequired'), 'error'); return; }
+
     const file = document.getElementById(prefix + 'DocFile').files[0];
     if (!file) return;
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
@@ -1687,7 +1751,7 @@ function wireDocumentUpload(prefix) {
     const { error: rowErr } = await sb.from('rental_documents').insert({
       tenancy_id: scope === 'tenancy' ? docsTenancyId : null,
       property_id: scope === 'property' ? currentProperty.id : null,
-      title: document.getElementById(prefix + 'DocTitle').value.trim(),
+      title,
       category: document.getElementById(prefix + 'DocCategory').value,
       storage_path: path,
       file_size: file.size,
@@ -1718,35 +1782,70 @@ wireDocumentUpload('owner');
 // Audit log (owner only)
 // ============================================================
 
+// The history is the one tab whose whole point is completeness, and it cut
+// silently at two hundred rows with nothing to say it had. It still pages —
+// nobody wants ten thousand rows laid out at once — but it says how many it is
+// showing of how many there are, and will fetch the rest.
+const AUDIT_PAGE_SIZE = 200;
+let auditShown = AUDIT_PAGE_SIZE;
+
+const actionLabel = (v) => enumLabel('act', v);
+
 async function refreshAudit() {
   const el = document.getElementById('auditList');
-  let query = sb.from('rental_audit_log')
-    .select('*').eq('property_id', currentProperty.id)
-    .order('occurred_at', { ascending: false }).limit(200);
-  if (document.getElementById('auditFilter').value === 'errors') {
-    query = query.eq('action', 'ERROR');
-  }
-  const { data: rows, error } = await query;
-  if (error) { reportFailure('audit.load', error); return; }
+  const errorsOnly = document.getElementById('auditFilter').value === 'errors';
 
-  el.innerHTML = (!rows || rows.length === 0)
-    ? `<span class="muted">${t('audit.empty')}</span>`
-    : rows.map(r => `
+  let query = sb.from('rental_audit_log')
+    .select('*', { count: 'exact' }).eq('property_id', currentProperty.id)
+    .order('occurred_at', { ascending: false }).limit(auditShown);
+  if (errorsOnly) query = query.eq('action', 'ERROR');
+
+  const { data: rows, error, count } = await query;
+  if (error) {
+    reportFailure('audit.load', error);
+    el.innerHTML = `<span class="muted">${t('list.loadFailed')}</span>`;
+    return;
+  }
+
+  if (!rows || rows.length === 0) {
+    el.innerHTML = `<span class="muted">${t('audit.empty')}</span>`;
+    return;
+  }
+
+  el.innerHTML = rows.map(r => `
       <div class="list-item audit-row">
         <div class="main">
-          <div class="title">${t('act.' + r.action)} · ${escapeHtml(r.table_name)}</div>
+          <div class="title">${actionLabel(r.action)} · ${escapeHtml(r.table_name)}</div>
           <div class="sub">${fmtDateTime(r.occurred_at)} · ${escapeHtml(r.actor_email || '—')}</div>
           <details class="audit-details">
             <summary>${t('audit.details')}</summary>
             <pre>${escapeHtml(JSON.stringify(r.new_data ?? r.old_data ?? {}, null, 1))}</pre>
           </details>
         </div>
-        <span class="pill ${r.action === 'ERROR' ? 'overdue' : 'low'}">${t('act.' + r.action)}</span>
+        <span class="pill ${r.action === 'ERROR' ? 'overdue' : 'low'}">${actionLabel(r.action)}</span>
       </div>`).join('');
+
+  const total = typeof count === 'number' ? count : rows.length;
+  if (rows.length < total) {
+    el.insertAdjacentHTML('beforeend', `<div class="list-more">
+      <span class="muted">${t('list.showingCount', { shown: rows.length, total })}</span>
+      <button class="btn-small" data-load-more>${t('list.loadMore')}</button>
+    </div>`);
+    el.querySelector('[data-load-more]').addEventListener('click', () => {
+      auditShown += AUDIT_PAGE_SIZE;
+      refreshAudit();
+    });
+  }
 }
 
-document.getElementById('auditRefresh').addEventListener('click', refreshAudit);
-document.getElementById('auditFilter').addEventListener('change', refreshAudit);
+document.getElementById('auditRefresh').addEventListener('click', () => {
+  auditShown = AUDIT_PAGE_SIZE;
+  refreshAudit();
+});
+document.getElementById('auditFilter').addEventListener('change', () => {
+  auditShown = AUDIT_PAGE_SIZE;   // a new filter starts at the top again
+  refreshAudit();
+});
 
 // ============================================================
 // TENANT DASHBOARD
