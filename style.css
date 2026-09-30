@@ -93,6 +93,15 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .btn-small:hover{background:var(--line);}
 .btn-small.danger{color:var(--danger); border-color:#e8c4bd;}
 .danger-link{color:var(--danger);}
+
+/* Location card: the address, the map, and a way out to the phone's own app. */
+.loc-address{margin:6px 0 12px; font-weight:600;}
+.map-frame{
+  position:relative; aspect-ratio:4/3; max-width:100%; overflow:hidden;
+  border:1px solid var(--line); border-radius:10px; background:var(--bg-alt);
+}
+.map-frame iframe{position:absolute; inset:0; width:100%; height:100%; border:0;}
+.map-open{display:inline-block; margin-top:10px; text-decoration:none;}
 /* A checkbox reads as a sentence, not as a stacked label over a lone box. */
 .check-row{display:flex; align-items:center; gap:8px; margin:10px 0 0; font-weight:500;}
 .check-row input{width:auto; margin:0;}

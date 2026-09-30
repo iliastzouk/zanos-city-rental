@@ -371,7 +371,8 @@ async function openStoredFile(path) {
 
 async function loadOwnerDashboard() {
   document.getElementById('ownerPropName').textContent = currentProperty.name;
-  document.getElementById('ownerPropAddress').textContent = currentProperty.address || '';
+  document.getElementById('ownerPropAddress').textContent =
+    addressForLang(currentProperty.address, currentProperty.address_en);
   document.getElementById('inviteCodeDisplay').textContent = currentProperty.invite_code;
 
   await refreshTenancies();
@@ -1892,6 +1893,8 @@ async function loadTenantDashboard() {
   await refreshTenantMaintenance();
   await refreshTenantMessages();
   await renderInfoList('tenantInfoList');
+  renderLocation(document.getElementById('tenantLocation'),
+    currentProperty.address, currentProperty.address_en);
   await refreshDocuments('tenant');
   await renderCalendar('tenant');
 }
@@ -2521,7 +2524,10 @@ async function boot() {
   }
 
   currentMembership = { property_id: summary.property_id, role: summary.role };
-  currentProperty = { id: summary.property_id, name: summary.name, address: summary.address };
+  currentProperty = {
+    id: summary.property_id, name: summary.name,
+    address: summary.address, address_en: summary.address_en
+  };
 
   if (summary.role === 'owner') {
     // Owners read the full row, which also carries the tenant invite code.

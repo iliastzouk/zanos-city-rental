@@ -2,7 +2,7 @@
 // Zanos City — guest page
 // Read-only, no account. The code alone is the credential and it arrives in the
 // URL fragment. This page deliberately shares nothing with the owner/tenant app
-// beyond the stylesheet and the translations.
+// beyond the stylesheet, the translations and the small location helper.
 // ============================================================
 
 const SUPABASE_URL = 'https://fwkchszqkosjyesmsvlj.supabase.co';
@@ -43,7 +43,10 @@ async function showInfo(code) {
   if (error || !rows || rows.length === 0) return false;
 
   document.getElementById('guestPropName').textContent = rows[0].property_name;
-  document.getElementById('guestPropAddress').textContent = rows[0].property_address || '';
+  document.getElementById('guestPropAddress').textContent =
+    addressForLang(rows[0].property_address, rows[0].property_address_en);
+  renderLocation(document.getElementById('guestLocation'),
+    rows[0].property_address, rows[0].property_address_en);
 
   const entries = rows.filter(r => r.entry_title);
   document.getElementById('guestInfoList').innerHTML = entries.length === 0
