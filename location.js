@@ -13,10 +13,14 @@ function addressForLang(greek, english) {
 
 // An owner-pinned point (coordinates, or a place name) beats searching the
 // address, since address text alone can land on the wrong building. Failing that
-// the place is looked up from Latin text when there is some: a geocoder finds
-// "Zanos City, Aglantzia" more reliably than the same words in Greek script.
+// the address is searched in the language the map itself is shown in: asking a
+// Greek-language map for Latin text came back as an empty world map, while the
+// English map found the same building from the English address.
 function mapQuery(greek, english, point) {
-  return ((point || '').trim() || english || greek || '').trim();
+  const pinned = (point || '').trim();
+  if (pinned) return pinned;
+  const own = currentLang === 'en' ? english : greek;
+  return (own || english || greek || '').trim();
 }
 
 function mapsOpenUrl(query) {
