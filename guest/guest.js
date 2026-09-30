@@ -46,7 +46,7 @@ async function showInfo(code) {
   document.getElementById('guestPropAddress').textContent =
     addressForLang(rows[0].property_address, rows[0].property_address_en);
   renderLocation(document.getElementById('guestLocation'),
-    rows[0].property_address, rows[0].property_address_en);
+    rows[0].property_address, rows[0].property_address_en, rows[0].property_map_point);
 
   const entries = rows.filter(r => r.entry_title);
   document.getElementById('guestInfoList').innerHTML = entries.length === 0

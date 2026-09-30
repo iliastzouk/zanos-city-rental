@@ -374,6 +374,7 @@ async function loadOwnerDashboard() {
   document.getElementById('ownerPropAddress').textContent =
     addressForLang(currentProperty.address, currentProperty.address_en);
   document.getElementById('inviteCodeDisplay').textContent = currentProperty.invite_code;
+  fillLocationForm();
 
   await refreshTenancies();
   await refreshOwnerPayments();
@@ -1428,6 +1429,43 @@ document.getElementById('infoForm').addEventListener('submit', async (e) => {
   await refreshPropertyInfo();
 });
 
+// ---- Address and map point --------------------------------------------------
+// The address lived in the database alone, with no way to change it from here.
+// It is kept in both languages, and optionally pinned to an exact spot.
+function fillLocationForm() {
+  document.getElementById('addressEl').value = currentProperty.address || '';
+  document.getElementById('addressEn').value = currentProperty.address_en || '';
+  document.getElementById('mapPoint').value = currentProperty.map_point || '';
+  renderLocation(document.getElementById('ownerLocation'),
+    currentProperty.address, currentProperty.address_en, currentProperty.map_point);
+}
+
+document.getElementById('locationForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('locationMsg');
+  const values = {
+    address: document.getElementById('addressEl').value.trim() || null,
+    address_en: document.getElementById('addressEn').value.trim() || null,
+    map_point: document.getElementById('mapPoint').value.trim() || null
+  };
+
+  // Without select(), a policy that matches no row reports success having
+  // changed nothing, and the owner would be told it was saved.
+  const { data, error } = await sb.from('rental_properties')
+    .update(values).eq('id', currentProperty.id).select('id');
+  if (error) { reportFailure('property.location', error, msg); return; }
+  if (!data || data.length === 0) {
+    reportFailure('property.location', new Error('no row updated'), msg, t('loc.notSaved'));
+    return;
+  }
+
+  Object.assign(currentProperty, values);
+  document.getElementById('ownerPropAddress').textContent =
+    addressForLang(currentProperty.address, currentProperty.address_en);
+  fillLocationForm();
+  setMsg(msg, t('loc.saved'), 'ok');
+});
+
 // The guest page sits next to this one, with the code in the fragment so it is
 // never sent to a server or leaked through a referrer.
 function guestLinkFor(code) {
@@ -1894,7 +1932,7 @@ async function loadTenantDashboard() {
   await refreshTenantMessages();
   await renderInfoList('tenantInfoList');
   renderLocation(document.getElementById('tenantLocation'),
-    currentProperty.address, currentProperty.address_en);
+    currentProperty.address, currentProperty.address_en, currentProperty.map_point);
   await refreshDocuments('tenant');
   await renderCalendar('tenant');
 }
@@ -2526,7 +2564,8 @@ async function boot() {
   currentMembership = { property_id: summary.property_id, role: summary.role };
   currentProperty = {
     id: summary.property_id, name: summary.name,
-    address: summary.address, address_en: summary.address_en
+    address: summary.address, address_en: summary.address_en,
+    map_point: summary.map_point
   };
 
   if (summary.role === 'owner') {

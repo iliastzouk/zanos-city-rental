@@ -11,10 +11,12 @@ function addressForLang(greek, english) {
   return (primary || english || greek || '').trim();
 }
 
-// The place is looked up from Latin text when there is some: a geocoder finds
+// An owner-pinned point (coordinates, or a place name) beats searching the
+// address, since address text alone can land on the wrong building. Failing that
+// the place is looked up from Latin text when there is some: a geocoder finds
 // "Zanos City, Aglantzia" more reliably than the same words in Greek script.
-function mapQuery(greek, english) {
-  return (english || greek || '').trim();
+function mapQuery(greek, english, point) {
+  return ((point || '').trim() || english || greek || '').trim();
 }
 
 function mapsOpenUrl(query) {
@@ -35,16 +37,17 @@ function locationEscape(s) {
 // Fills a container with the address, an embedded map and a link that opens the
 // phone's own maps app — the thing a person standing outside actually wants.
 // Leaves it empty when there is no address, rather than a map of nowhere.
-function renderLocation(container, greek, english) {
+function renderLocation(container, greek, english, point) {
   if (!container) return;
   const shown = addressForLang(greek, english);
-  if (!shown) { container.innerHTML = ''; container.hidden = true; return; }
+  // A pinned point is enough to show a map even with no address written.
+  if (!shown && !(point || '').trim()) { container.innerHTML = ''; container.hidden = true; return; }
 
-  const query = mapQuery(greek, english);
+  const query = mapQuery(greek, english, point);
   container.hidden = false;
   container.innerHTML = `
     <h2>${locationEscape(t('loc.title'))}</h2>
-    <p class="loc-address">${locationEscape(shown)}</p>
+    ${shown ? `<p class="loc-address">${locationEscape(shown)}</p>` : ''}
     <div class="map-frame">
       <iframe src="${locationEscape(mapsEmbedUrl(query))}" title="${locationEscape(t('loc.mapTitle'))}"
         loading="lazy" referrerpolicy="no-referrer" allowfullscreen></iframe>

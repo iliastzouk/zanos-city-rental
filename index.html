@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20260930a">
+<link rel="stylesheet" href="style.css?v=20260930b">
 </head>
 <body>
 
@@ -420,6 +420,22 @@
         <h2 data-i18n="info.listTitle">Πληροφορίες χώρου</h2>
         <div id="ownerInfoList" class="list"></div>
       </div>
+      <div class="card">
+        <h2 data-i18n="loc.editTitle">Διεύθυνση και χάρτης</h2>
+        <p class="muted" data-i18n="loc.editHint">Τη βλέπουν ο ενοικιαστής και οι επισκέπτες, ο καθένας στη γλώσσα του.</p>
+        <form id="locationForm">
+          <label data-i18n="loc.addressEl">Διεύθυνση (Ελληνικά)</label>
+          <input type="text" id="addressEl" maxlength="300">
+          <label data-i18n="loc.addressEn">Διεύθυνση (Αγγλικά)</label>
+          <input type="text" id="addressEn" maxlength="300">
+          <label data-i18n="loc.mapPoint">Σημείο στον χάρτη (προαιρετικό)</label>
+          <input type="text" id="mapPoint" maxlength="200" data-i18n-placeholder="loc.mapPointPlaceholder" placeholder="π.χ. 35.12345, 33.12345">
+          <p class="muted small-note" data-i18n="loc.mapPointHint">Αν η καρφίτσα πέφτει σε λάθος μέρος, βάλε εδώ συντεταγμένες (από το Google Maps: πάτημα στο σημείο και αντιγραφή των αριθμών) ή όνομα μέρους. Κενό = ο χάρτης ψάχνει τη διεύθυνση.</p>
+          <button type="submit" class="btn-primary" data-i18n="loc.save">Αποθήκευση</button>
+        </form>
+        <p id="locationMsg" class="msg" hidden></p>
+      </div>
+      <div class="card" id="ownerLocation" hidden></div>
 
         </div>
 
@@ -615,8 +631,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20260930a"></script>
-<script src="location.js?v=20260930a"></script>
-<script src="app.js?v=20260930a"></script>
+<script src="i18n.js?v=20260930b"></script>
+<script src="location.js?v=20260930b"></script>
+<script src="app.js?v=20260930b"></script>
 </body>
 </html>
