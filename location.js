@@ -13,23 +13,25 @@ function addressForLang(greek, english) {
 
 // An owner-pinned point (coordinates, or a place name) beats searching the
 // address, since address text alone can land on the wrong building. Failing that
-// the address is searched in the language the map itself is shown in: asking a
-// Greek-language map for Latin text came back as an empty world map, while the
-// English map found the same building from the English address.
+// the English address is searched, being the one a real phone has been seen to
+// resolve to the right building.
 function mapQuery(greek, english, point) {
   const pinned = (point || '').trim();
   if (pinned) return pinned;
-  const own = currentLang === 'en' ? english : greek;
-  return (own || english || greek || '').trim();
+  return (english || greek || '').trim();
 }
 
 function mapsOpenUrl(query) {
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
 }
 
+// The embed is always requested in English. The same English query found the
+// building under hl=en and returned an empty world map under hl=el, so the
+// Greek locale is the thing that breaks it, not the address text. The button
+// below it opens the phone's own maps app, which speaks the reader's language.
 function mapsEmbedUrl(query) {
   return 'https://maps.google.com/maps?q=' + encodeURIComponent(query)
-    + '&z=17&output=embed&hl=' + encodeURIComponent(currentLang);
+    + '&z=17&output=embed&hl=en';
 }
 
 function locationEscape(s) {
