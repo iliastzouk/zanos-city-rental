@@ -1,0 +1,32 @@
+# A free Supabase project pauses itself after about a week without activity,
+# and the app then hangs on its loading screen until someone restores it by
+# hand. This asks the database a real question every three days so it never
+# counts as idle. The same project also serves TzoukBoard, which this keeps
+# awake too.
+#
+# The call runs the guest lookup with a code that matches nothing: it touches
+# the database, returns an empty list, and needs no credential beyond the
+# publishable key the pages already ship to every browser.
+
+name: Keep database awake
+
+on:
+  schedule:
+    - cron: '17 6 */3 * *'   # 06:17 UTC every third day
+  workflow_dispatch:          # and on demand, from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the database a question
+        run: |
+          status=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST 'https://fwkchszqkosjyesmsvlj.supabase.co/rest/v1/rpc/rental_guest_view' \
+            -H 'apikey: sb_publishable_kjWHvwntT1U__wY_5K0F1w_cd_YhBT9' \
+            -H 'Content-Type: application/json' \
+            -d '{"p_code":"keepalive"}')
+          echo "HTTP $status: $(cat response.json)"
+          # A paused project does not answer 200; fail loudly so it shows in Actions.
+          test "$status" = "200"

@@ -36,6 +36,7 @@ const MAX_PHOTOS = 5;
 // ---------- View management ----------
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.hidden = (v.id !== id));
+  watchLoading(document.getElementById('view-loading'));
 }
 
 function setMsg(el, text, kind) {

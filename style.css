@@ -328,3 +328,15 @@ a.btn-small{display:inline-block; text-decoration:none;}
 
 .pay-summary{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px;}
 .pay-summary .pill{font-size:.78rem;}
+
+/* Loading: a quiet spinner, and a plain explanation if it goes on too long. */
+.loading-box{display:flex; flex-direction:column; align-items:center; gap:14px;
+  padding-block:64px; text-align:center;}
+.spinner{width:36px; height:36px; border-radius:50%;
+  border:3px solid var(--line); border-top-color:var(--accent);
+  animation:spin .9s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){ .spinner{animation-duration:2.4s;} }
+.loading-slow{max-width:340px;}
+.loading-slow p{margin:0 0 6px;}
+.loading-slow .btn-primary{margin-top:10px;}

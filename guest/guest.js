@@ -13,6 +13,7 @@ const GUEST_CODE_KEY = 'zanos_guest_code';
 
 function showSection(id) {
   document.querySelectorAll('.view').forEach(v => v.hidden = (v.id !== id));
+  watchLoading(document.getElementById('guest-loading'));
 }
 
 function setMsg(el, text, kind) {
