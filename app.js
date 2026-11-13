@@ -504,9 +504,21 @@ async function deleteTenancy(tenancy) {
 
   setMsg(msg, t('tenancy.deleting'), '');
 
+  // Fault photos hang off the reports rather than the tenancy, so they need a
+  // second look-up; they were left out before and stayed in the bucket.
+  let photoPaths = [];
+  const requestIds = requests.data.map(r => r.id);
+  if (requestIds.length) {
+    const { data: photos, error: photoErr } = await sb.from('rental_maintenance_photos')
+      .select('storage_path').in('request_id', requestIds);
+    if (photoErr) { reportFailure('tenancy.deletePhotos', photoErr, msg); return; }
+    photoPaths = (photos || []).map(ph => ph.storage_path);
+  }
+
   // The cascade clears the rows but not the stored files, which would otherwise
   // linger in the bucket unreachable and unaccounted for.
   const paths = [
+    ...photoPaths,
     ...documents.data.map(d => d.storage_path),
     ...payments.data.map(p => p.proof_path),
     ...payments.data.map(p => p.receipt_path)
