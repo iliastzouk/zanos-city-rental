@@ -6,7 +6,7 @@
 <title>Zanos City — Διαχείριση Ενοικίασης</title>
 <!-- ?v= is bumped on every deploy: GitHub Pages caches these hard, and a
      returning visitor would otherwise keep running the previous version. -->
-<link rel="stylesheet" href="style.css?v=20261102a">
+<link rel="stylesheet" href="style.css?v=20261113a">
 </head>
 <body>
 
@@ -132,6 +132,7 @@
         <code id="inviteCodeDisplay">—</code>
       </div>
     </div>
+    <button type="button" id="previewTenantBtn" class="btn-small preview-open" data-i18n="preview.open">👁 Προβολή ως ενοικιαστής</button>
 
     <nav class="tabs">
       <button class="tab-btn active" data-tab="tenancy" data-i18n="tab.tenancy">Μίσθωση</button>
@@ -490,6 +491,10 @@
 
   <!-- TENANT DASHBOARD -->
   <section id="view-tenant" class="view" hidden>
+    <div id="previewBanner" class="preview-banner" hidden>
+      <span data-i18n="preview.banner">Βλέπεις ό,τι βλέπει ο ενοικιαστής. Μόνο ανάγνωση.</span>
+      <button type="button" id="exitPreviewBtn" class="btn-small" data-i18n="preview.exit">Έξοδος</button>
+    </div>
     <div class="dash-header">
       <div>
         <h1 data-i18n="tenant.title">Το μίσθιό μου</h1>
@@ -639,9 +644,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="i18n.js?v=20261102a"></script>
-<script src="location.js?v=20261102a"></script>
-<script src="loading.js?v=20261102a"></script>
-<script src="app.js?v=20261102a"></script>
+<script src="i18n.js?v=20261113a"></script>
+<script src="location.js?v=20261113a"></script>
+<script src="loading.js?v=20261113a"></script>
+<script src="app.js?v=20261113a"></script>
 </body>
 </html>

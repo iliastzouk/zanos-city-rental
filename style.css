@@ -340,3 +340,12 @@ a.btn-small{display:inline-block; text-decoration:none;}
 .loading-slow{max-width:340px;}
 .loading-slow p{margin:0 0 6px;}
 .loading-slow .btn-primary{margin-top:10px;}
+
+/* Owner's view of the tenant's screen: say so plainly, and keep the way out in reach. */
+.preview-open{margin:-8px 0 16px;}
+.preview-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  margin-bottom:16px; padding:10px 14px; border-radius:10px;
+  background:#eef3fb; color:#3a5a8c; border:1px solid #c9d8ef; font-size:.88rem; font-weight:600;
+}
+body.previewing #view-tenant form{opacity:.6;}

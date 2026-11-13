@@ -94,7 +94,23 @@ function escapeHtml(s) {
 
 // In every thread there are exactly two sides: the signed-in user and whoever
 // holds the other role on the property.
+// ---- Tenant preview ----------------------------------------------------------
+// The owner sees the tenant's screen for a tenancy, exactly as the tenant would,
+// without a second account: one tenancy belongs to one tenant account, and only
+// one tenancy may be active, so a test login cannot share the real one. RLS
+// already lets the owner read everything the tenant's screen shows. The preview
+// is read-only: anything that would write is stopped, since it would be written
+// as the owner, not the tenant.
+let previewTenancy = null;
+
+// Whose messages and comments read as "You" on screen.
+function viewerId() {
+  if (previewTenancy) return previewTenancy.tenant_user_id || '__unclaimed_tenant__';
+  return currentUser.id;
+}
+
 function otherPartyLabel() {
+  if (previewTenancy) return t('party.owner');
   return currentMembership && currentMembership.role === 'owner'
     ? t('party.tenant')
     : t('party.owner');
@@ -103,6 +119,10 @@ function otherPartyLabel() {
 // ---------- Tabs ----------
 function initTabs(scopeSelector) {
   const scope = document.querySelector(scopeSelector);
+  // boot() runs again on every language change, and the tenant preview enters
+  // this view repeatedly; each call used to stack another listener per tab.
+  if (scope.dataset.tabsWired) return;
+  scope.dataset.tabsWired = '1';
   scope.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       scope.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1912,9 +1932,12 @@ async function renderInfoList(containerId) {
 }
 
 async function loadTenantDashboard() {
-  const { data: tenancy } = await sb.from('rental_tenancies')
-    .select('*').eq('tenant_user_id', currentUser.id).eq('status', 'active')
-    .order('start_date', { ascending: false }).limit(1).maybeSingle();
+  let tenancy = previewTenancy;
+  if (!tenancy) {
+    ({ data: tenancy } = await sb.from('rental_tenancies')
+      .select('*').eq('tenant_user_id', currentUser.id).eq('status', 'active')
+      .order('start_date', { ascending: false }).limit(1).maybeSingle());
+  }
   currentTenancy = tenancy;
 
   const infoEl = document.getElementById('tenantLeaseInfo');
@@ -2422,7 +2445,7 @@ async function loadComments(card, requestId) {
     (showAll ? '' : `<button type="button" class="btn-small" data-show-all>${t('maint.showAllComments', { count: comments.length })}</button>`)
     + visible.map(c => `
     <div class="comment">
-      <span class="author">${c.author_id === currentUser.id ? t('party.you') : otherPartyLabel()}</span>
+      <span class="author">${c.author_id === viewerId() ? t('party.you') : otherPartyLabel()}</span>
       <span class="comment-time">${fmtChatTime(c.created_at)}</span>
       <div class="comment-body">${escapeHtml(c.body)}</div>
     </div>`).join('');
@@ -2454,6 +2477,7 @@ function lastSeen(tenancyId) {
   try { return localStorage.getItem(seenKey(tenancyId)) || ''; } catch (e) { return ''; }
 }
 function markMessagesSeen(tenancyId, isoTime) {
+  if (previewTenancy) return;   // the owner reading as the tenant has not read it as the owner
   try { localStorage.setItem(seenKey(tenancyId), isoTime); } catch (e) { /* private window */ }
 }
 
@@ -2488,7 +2512,7 @@ async function renderMessages(containerId, tenancyId, keepPosition) {
   } else {
     const seen = lastSeen(tenancyId);
     setTabBadge(MSG_TAB[containerId],
-      messages.filter(m => m.author_id !== currentUser.id && m.created_at > seen).length);
+      messages.filter(m => m.author_id !== viewerId() && m.created_at > seen).length);
   }
 
   const shown = Math.max(msgShown[containerId] || MSG_PAGE_SIZE, 1);
@@ -2501,7 +2525,7 @@ async function renderMessages(containerId, tenancyId, keepPosition) {
       ? `<button type="button" class="btn-small" data-load-earlier>${t('msg.loadEarlier')}</button>`
       : '')
     + visible.map(m => {
-      const mine = m.author_id === currentUser.id;
+      const mine = m.author_id === viewerId();
       return `
     <div class="message-bubble ${mine ? 'mine' : 'theirs'}">
       <div class="sender">${mine ? t('party.you') : otherPartyLabel()}</div>
@@ -2576,15 +2600,65 @@ async function boot() {
     // Keep the summary values if that read comes back empty, rather than
     // blanking the whole dashboard on a null.
     currentProperty = property || currentProperty;
+    const resumeId = previewTenancy && previewTenancy.id;
+    previewTenancy = null;
     showView('view-owner');
     initTabs('#view-owner');
     await loadOwnerDashboard();
+    // A language change re-runs boot; it should not throw the owner out of a preview.
+    if (resumeId) await enterTenantPreview(resumeId);
   } else {
     showView('view-tenant');
     initTabs('#view-tenant');
     await loadTenantDashboard();
   }
 }
+
+async function enterTenantPreview(tenancyId) {
+  const tenancy = allTenancies.find(x => x.id === tenancyId);
+  if (!tenancy) return;
+  previewTenancy = tenancy;
+  document.body.classList.add('previewing');
+  document.getElementById('previewBanner').hidden = false;
+  showView('view-tenant');
+  initTabs('#view-tenant');
+  window.scrollTo({ top: 0 });
+  await loadTenantDashboard();
+}
+
+async function exitTenantPreview() {
+  previewTenancy = null;
+  document.body.classList.remove('previewing');
+  document.getElementById('previewBanner').hidden = true;
+  showView('view-owner');
+  // The tenant view borrowed currentTenancy; give the owner's dashboard its own back.
+  await loadOwnerDashboard();
+}
+
+document.getElementById('previewTenantBtn').addEventListener('click', () => {
+  // The active tenancy, else the most recent one, so an owner between tenants
+  // can still look at the last tenant's screen.
+  const target = currentTenancy || allTenancies[0];
+  if (!target) { alert(t('preview.noTenancy')); return; }
+  enterTenantPreview(target.id);
+});
+document.getElementById('exitPreviewBtn').addEventListener('click', exitTenantPreview);
+
+// Anything in the tenant view that would write is stopped while previewing: a
+// message, a comment, a fault report, a payment declaration or receipt would all
+// be saved as the owner. Reading — tabs, filters, bills, photos — goes through.
+function blockPreviewWrite(e) {
+  if (!previewTenancy) return;
+  const inTenant = e.target.closest && e.target.closest('#view-tenant');
+  if (!inTenant) return;
+  const writes = e.type === 'submit' || e.target.closest('[data-declare], [data-receipt]');
+  if (!writes) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  alert(t('preview.readOnly'));
+}
+document.addEventListener('submit', blockPreviewWrite, true);
+document.addEventListener('click', blockPreviewWrite, true);
 
 sb.auth.onAuthStateChange(async (event) => {
   await boot();
