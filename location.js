@@ -1,7 +1,7 @@
 // ============================================================
-// Zanos City — where the property is
-// Shared by the guest page and the tenant's Information tab, which is why it
-// lives apart from both. Needs i18n.js (t, currentLang) loaded first.
+// Zanos City — where the property is, and links in information entries
+// Shared by the guest page and the app, which is why it lives apart from both.
+// Needs i18n.js (t, currentLang) loaded first.
 // ============================================================
 
 // The address is stored once per language. A reader gets their own, and falls
@@ -60,4 +60,16 @@ function renderLocation(container, greek, english, point) {
     </div>
     <a class="btn-small map-open" href="${locationEscape(mapsOpenUrl(query))}"
        target="_blank" rel="noopener noreferrer">${locationEscape(t('loc.open'))}</a>`;
+}
+
+// Information entries are plain text, but an entry may hold a web address (an
+// appliance manual, a provider's page). Escapes the text, then turns each
+// http(s) address into a link that opens in a new tab. Quotes and angle
+// brackets end an address, so nothing typed can leave the href attribute.
+function linkifyText(text) {
+  return locationEscape(text).replace(/https?:\/\/[^\s<>"']+/g, (match) => {
+    const url = match.replace(/[.,;:!?)]+$/, '');
+    const rest = match.slice(url.length);
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${rest}`;
+  });
 }

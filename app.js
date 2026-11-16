@@ -1352,7 +1352,7 @@ async function refreshPropertyInfo() {
     <div class="list-item">
       <div class="main">
         <div class="title">${escapeHtml(entry.title)}</div>
-        ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
+        ${entry.body ? `<div class="sub">${linkifyText(entry.body)}</div>` : ''}
       </div>
       <div class="row-pills">
         <span class="pill ${entry.visible_to_guests ? 'paid' : 'pending'}">
@@ -1938,7 +1938,7 @@ async function renderInfoList(containerId) {
       <div class="list-item">
         <div class="main">
           <div class="title">${escapeHtml(entry.title)}</div>
-          ${entry.body ? `<div class="sub">${escapeHtml(entry.body)}</div>` : ''}
+          ${entry.body ? `<div class="sub">${linkifyText(entry.body)}</div>` : ''}
         </div>
       </div>`).join('');
 }

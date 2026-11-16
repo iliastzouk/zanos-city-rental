@@ -56,7 +56,7 @@ async function showInfo(code) {
       <div class="list-item">
         <div class="main">
           <div class="title">${escapeHtml(r.entry_title)}</div>
-          ${r.entry_body ? `<div class="sub">${escapeHtml(r.entry_body)}</div>` : ''}
+          ${r.entry_body ? `<div class="sub">${linkifyText(r.entry_body)}</div>` : ''}
         </div>
       </div>`).join('');
 
