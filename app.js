@@ -1748,11 +1748,13 @@ async function renderDocumentList(el, filter, canManage, emptyText) {
       <div class="list-item">
         <div class="main">
           <div class="title">${escapeHtml(d.title)}</div>
-          <div class="sub">${docCategoryLabel(d.category)} · ${fmtDate(d.created_at)}</div>
+          <div class="sub">${docCategoryLabel(d.category)}${d.link_url ? ` · ${t('doc.isLink')}` : ''} · ${fmtDate(d.created_at)}</div>
         </div>
         <div class="row-actions">
-          <button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>
-          ${canManage ? `<button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.delete')}</button>` : ''}
+          ${d.link_url
+            ? `<a class="btn-small" href="${escapeHtml(safeUrl(d.link_url))}" target="_blank" rel="noopener noreferrer">${t('doc.open')}</a>`
+            : `<button class="btn-small" data-open-doc="${d.id}" data-path="${escapeHtml(d.storage_path)}">${t('doc.open')}</button>`}
+          ${canManage ? `<button class="btn-small danger" data-del-doc="${d.id}" data-path="${escapeHtml(d.storage_path || '')}">${t('doc.delete')}</button>` : ''}
         </div>
       </div>`).join('');
 
@@ -1769,9 +1771,12 @@ async function renderDocumentList(el, filter, canManage, emptyText) {
       const { error: delErr } = await sb.from('rental_documents')
         .delete().eq('id', btn.getAttribute('data-del-doc'));
       if (delErr) { reportFailure('documents.removeRow', delErr); return; }
-      const { error: rmErr } = await sb.storage.from('rental-documents')
-        .remove([btn.getAttribute('data-path')]);
-      if (rmErr) { reportFailure('documents.removeFile', rmErr); return; }
+      // A link has no stored file behind it.
+      const path = btn.getAttribute('data-path');
+      if (path) {
+        const { error: rmErr } = await sb.storage.from('rental-documents').remove([path]);
+        if (rmErr) { reportFailure('documents.removeFile', rmErr); return; }
+      }
       await refreshDocuments(canManage ? 'owner' : 'tenant');
     });
   });
@@ -1805,8 +1810,28 @@ function wireDocumentUpload(prefix) {
     const title = document.getElementById(prefix + 'DocTitle').value.trim();
     if (!title) { setMsg(msg, t('form.titleRequired'), 'error'); return; }
 
+    const category = document.getElementById(prefix + 'DocCategory').value;
     const file = document.getElementById(prefix + 'DocFile').files[0];
-    if (!file) return;
+    const link = document.getElementById(prefix + 'DocUrl').value.trim();
+    // A document is either a stored file or a link to one kept elsewhere (an
+    // appliance manual on the maker's site), never both and never neither.
+    if (!file === !link) { setMsg(msg, t('doc.fileOrLink'), 'error'); return; }
+
+    if (link) {
+      if (!/^https?:\/\/[^\s<>"']+$/.test(link) || !safeUrl(link)) { setMsg(msg, t('doc.badLink'), 'error'); return; }
+      const { error: linkErr } = await sb.from('rental_documents').insert({
+        tenancy_id: scope === 'tenancy' ? docsTenancyId : null,
+        property_id: scope === 'property' ? currentProperty.id : null,
+        title, category, link_url: link,
+        uploaded_by: currentUser.id
+      });
+      if (linkErr) { reportFailure('documents.insertRow', linkErr, msg); return; }
+      e.target.reset();
+      setMsg(msg, '', '');
+      await refreshDocuments(prefix);
+      return;
+    }
+
     if (file.size > MAX_UPLOAD_BYTES) { setMsg(msg, t('doc.tooBig'), 'error'); return; }
 
     setMsg(msg, t('doc.uploading'), '');
@@ -1824,7 +1849,7 @@ function wireDocumentUpload(prefix) {
       tenancy_id: scope === 'tenancy' ? docsTenancyId : null,
       property_id: scope === 'property' ? currentProperty.id : null,
       title,
-      category: document.getElementById(prefix + 'DocCategory').value,
+      category,
       storage_path: path,
       file_size: file.size,
       mime_type: file.type || null,
