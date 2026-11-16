@@ -150,6 +150,7 @@ const TRANSLATIONS = {
     'doccat.common_expenses': 'Κοινόχρηστα',
     'doccat.contract': 'Συμβόλαιο',
     'doccat.receipt': 'Απόδειξη',
+    'doccat.manual': 'Οδηγίες συσκευής',
     'doccat.other': 'Άλλο',
 
     'people.title': 'Ποιοι έχουν πρόσβαση',
@@ -554,6 +555,7 @@ const TRANSLATIONS = {
     'doccat.common_expenses': 'Common expenses',
     'doccat.contract': 'Contract',
     'doccat.receipt': 'Receipt',
+    'doccat.manual': 'Appliance manual',
     'doccat.other': 'Other',
 
     'people.title': 'Who has access',
