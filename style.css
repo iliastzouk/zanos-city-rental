@@ -139,6 +139,7 @@ input:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outli
 .list-item .main{flex:1; min-width:180px;}
 .list-item .title{font-weight:600; font-size:.92rem;}
 .list-item .sub{font-size:.8rem; color:var(--text-soft); margin-top:2px;}
+.list-item .pay-notes{white-space:pre-line;}
 .list-item .sub a{color:var(--accent-dark); text-decoration:underline; overflow-wrap:anywhere;}
 
 /* A payment row holds a variable number of pills and buttons. Left to wrap on

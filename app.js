@@ -800,9 +800,9 @@ async function refreshOwnerPayments() {
           p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : '',
           // Which day the tenant says they paid decides the date recorded below.
           p.tenant_marked_paid_at && p.status !== 'paid'
-            ? t('pay.declaredOn', { date: fmtDate(p.tenant_marked_paid_at) }) : '',
-          p.notes ? escapeHtml(p.notes) : ''
+            ? t('pay.declaredOn', { date: fmtDate(p.tenant_marked_paid_at) }) : ''
         ].filter(Boolean).join(' · ')}</div>
+        ${p.notes ? `<div class="sub pay-notes">${escapeHtml(p.notes)}</div>` : ''}
       </div>
       <div class="row-pills">
         ${p.series_id ? `<span class="pill low">${t('pay.seriesBadge')}</span>` : ''}
@@ -2038,9 +2038,9 @@ async function refreshTenantPayments() {
         <div class="title">${categoryLabel(p.category)} — ${fmtMoney(p.amount)}</div>
         <div class="sub">${[
           p.due_date ? t('pay.dueLabel') + ': ' + fmtDate(p.due_date) : '',
-          p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : '',
-          p.notes ? escapeHtml(p.notes) : ''
+          p.paid_on ? t('pay.paidLabel') + ': ' + fmtDate(p.paid_on) : ''
         ].filter(Boolean).join(' · ')}</div>
+        ${p.notes ? `<div class="sub pay-notes">${escapeHtml(p.notes)}</div>` : ''}
       </div>
       <div class="row-pills">
         ${declaredPill(p)}
